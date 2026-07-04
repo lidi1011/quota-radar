@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.build/
+dist/
+__pycache__/
+.pytest_cache/
+.DS_Store
+tmp/
+artifacts/tmp/
+*.log

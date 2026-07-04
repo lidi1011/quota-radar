@@ -1,0 +1,185 @@
+import SwiftUI
+
+struct UsageCardView: View {
+    var card: UsageCard
+    var accentHex: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(card.title, systemImage: card.systemImage)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(card.trailingValue)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(card.primaryValue)
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+
+            if card.id == .planProgress {
+                PlanProgressCardBody(progress: card.progress, note: card.note, accentHex: accentHex)
+            } else if let breakdown = card.breakdown {
+                TokenBreakdownBar(breakdown: breakdown, accentHex: accentHex)
+                TokenLegend(breakdown: breakdown)
+            } else if let note = card.note {
+                Capsule()
+                    .fill(Color.white.opacity(0.14))
+                    .frame(height: 12)
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            } else {
+                Capsule()
+                    .fill(Color.white.opacity(0.14))
+                    .frame(height: 10)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 188, maxHeight: 188, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.42))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
+}
+
+private struct PlanProgressCardBody: View {
+    var progress: PlanProgress?
+    var note: String?
+    var accentHex: String
+
+    var body: some View {
+        let markers = progress?.markers ?? []
+        VStack(alignment: .leading, spacing: 12) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(height: 12)
+                    Capsule()
+                        .fill(Color(hex: accentHex))
+                        .frame(width: geometry.size.width * (progress?.progress ?? 0), height: 12)
+
+                    ForEach(markers) { marker in
+                        markerDot(marker, width: geometry.size.width)
+                    }
+                }
+            }
+            .frame(height: 12)
+
+            HStack(spacing: 10) {
+                ForEach(progress?.markers ?? fallbackMarkers) { marker in
+                    markerView(label: marker.label, color: markerColorHex(marker.id))
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(height: 16)
+
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+        }
+    }
+
+    private func markerDot(_ marker: PlanMarker, width: CGFloat) -> some View {
+        let x = max(0, min(width - 10, width * marker.position))
+        return Circle()
+            .fill(markerColor(marker.id))
+            .overlay(Circle().stroke(Color.white.opacity(0.7), lineWidth: 1))
+            .frame(width: 10, height: 10)
+            .offset(x: x)
+    }
+
+    private func markerView(label: String, color: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(Color(hex: color)).frame(width: 8, height: 8)
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var fallbackMarkers: [PlanMarker] {
+        [
+            PlanMarker(id: "plus", label: "Plus", position: 0),
+            PlanMarker(id: "pro100", label: "Pro100", position: 0),
+            PlanMarker(id: "pro200", label: "Pro200", position: 0)
+        ]
+    }
+
+    private func markerColorHex(_ id: String) -> String {
+        switch id {
+        case "plus": accentHex
+        case "pro100": "#8B5CF6"
+        case "pro200": "#6EA8FE"
+        default: accentHex
+        }
+    }
+
+    private func markerColor(_ id: String) -> Color {
+        Color(hex: markerColorHex(id))
+    }
+}
+
+private struct TokenBreakdownBar: View {
+    var breakdown: TokenBreakdown
+    var accentHex: String
+
+    var body: some View {
+        GeometryReader { geometry in
+            let total = max(1, breakdown.total)
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color(hex: accentHex))
+                    .frame(width: geometry.size.width * Double(breakdown.uncachedInput) / Double(total))
+                Rectangle()
+                    .fill(Color(hex: "#8B5CF6"))
+                    .frame(width: geometry.size.width * Double(breakdown.cachedInput) / Double(total))
+                Rectangle()
+                    .fill(Color(hex: "#F59E0B"))
+                    .frame(width: geometry.size.width * Double(breakdown.output) / Double(total))
+            }
+            .clipShape(Capsule())
+        }
+        .frame(height: 12)
+        .background(Color.white.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct TokenLegend: View {
+    var breakdown: TokenBreakdown
+
+    var body: some View {
+        VStack(spacing: 6) {
+            legendRow(color: "#1E88FF", label: "未缓存", value: breakdown.uncachedInput)
+            legendRow(color: "#8B5CF6", label: "缓存", value: breakdown.cachedInput)
+            legendRow(color: "#F59E0B", label: "输出", value: breakdown.output)
+        }
+    }
+
+    private func legendRow(color: String, label: String, value: Int) -> some View {
+        HStack {
+            Circle().fill(Color(hex: color)).frame(width: 8, height: 8)
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(RadarFormatters.compactTokens(value))
+                .font(.caption.monospacedDigit().weight(.bold))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
