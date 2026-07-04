@@ -2,7 +2,7 @@
 
 ## 当前目标
 
-完成额度雷达首版 macOS SwiftUI App：正常 Dock App 窗口，展示 Codex 和 GLM 两个 provider 的额度、token 卡片、设置项和刷新入口。
+额度雷达 v1.0.0 已完成。当前目标是保留清晰的 milestone 完成态，并在需要时开启 v1.1 release-prep milestone。
 
 ## 最近完成
 
@@ -37,18 +37,20 @@
 - GSD 现在可以识别 Phase 1：`init.manager` 显示 Phase 1 `phase_complete=true`、`verification_status=passed`、`all_complete=true`。
 - 已运行 `$gsd-code-review 1 --depth=standard` 的 inline fallback 审查，并生成 `.planning/phases/01-initial-release/01-REVIEW.md`。审查结果：0 Critical、4 Warning、1 Info。
 - 已修复 `01-REVIEW.md` 中所有 4 个 Warning 和 1 个 Info，并生成 `.planning/phases/01-initial-release/01-REVIEW-FIX.md`：GLM force refresh 现在绕过缓存；Codex app-server/sqlite/grep 子进程均有超时；Codex “累计”不再截断最近 800 个 source；自动刷新间隔修改会立即重建定时器；版本元数据统一为 `1.0.0`。
-- 已补齐最小 milestone 收口文件：`.planning/v1.0.0-MILESTONE-AUDIT.md`、`.planning/milestones/v1.0.0-ROADMAP.md`、`.planning/milestones/v1.0.0-REQUIREMENTS.md`，并同步更新 `MILESTONES.md`、`ROADMAP.md`、`PROJECT.md`、`STATE.md`、`TODO.md`。
+- 已补齐最小 milestone 收口文件：`.planning/milestones/v1.0.0-MILESTONE-AUDIT.md`、`.planning/milestones/v1.0.0-ROADMAP.md`、`.planning/milestones/v1.0.0-REQUIREMENTS.md`，并同步更新 `MILESTONES.md`、`ROADMAP.md`、`PROJECT.md`、`STATE.md`、`TODO.md`。
+- 已运行 `$gsd-complete-milestone 1.0.0`：audit 已移动到 `.planning/milestones/v1.0.0-MILESTONE-AUDIT.md`，当前 `ROADMAP.md` 已压缩为 milestone 摘要，活动 `.planning/REQUIREMENTS.md` 已删除，后续新需求应由 `$gsd-new-milestone` 重新生成。
 
 ## 当前状态
 
-- 分支：master，无提交。
+- 分支：master。
 - 最近验证（2026-07-05 03:12 fresh run）：`swift test` 通过，14 个测试、0 failures；`swift build` 通过，exit 0；`./script/build_and_run.sh --verify` 通过，exit 0，并确认 QuotaRadar 进程可启动。`dist/QuotaRadar.app/Contents/Info.plist` 已确认包含 `CFBundleShortVersionString=1.0.0` 和 `CFBundleVersion=1`。
-- 当前阻塞：GLM quota API 仍需要在有 GLM/ZAI 凭据的 App 环境中继续验证；无凭据时 UI 会显示错误态。仓库仍未做初始提交和 v1.0.0 tag，本轮下一步就是提交和打 tag。
+- 当前阻塞：GLM quota API 仍需要在有 GLM/ZAI 凭据的 App 环境中继续验证；无凭据时 UI 会显示错误态。
 
 ## 下一步
 
-1. 做初始提交并打 `v1.0.0` tag。
-2. 后续开启 v1.1 release-prep milestone；GLM 真凭据验证仍需用户提供 token。
+1. 后续开启 v1.1 release-prep milestone。
+2. GLM 真凭据验证仍需用户提供 token。
+3. GitHub/App Store 打包签名策略放到 v1.1 里处理。
 
 ## 风险和注意事项
 

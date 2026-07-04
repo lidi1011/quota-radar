@@ -20,13 +20,15 @@
 - [x] 修复 code review 的 4 个 Warning：GLM force refresh、Codex 子进程超时、累计卡片全量口径、刷新间隔热更新。
 - [x] 统一 1.0.0 发布元数据：Codex app-server client version、`CFBundleShortVersionString`、`CFBundleVersion`。
 - [x] 补齐最小 milestone 文件：audit、roadmap archive、requirements archive、MILESTONES/STATE/PROJECT 收口。
+- [x] 运行 `$gsd-complete-milestone 1.0.0`，归档 audit，压缩 ROADMAP，删除活动 REQUIREMENTS。
 
 ## 后续 backlog
 
 - [x] 运行 `$gsd-code-review 1 --depth=standard`。
 - [x] 处理 `.planning/phases/01-initial-release/01-REVIEW.md` 中的 4 个 Warning。
 - [x] 运行/补齐 `$gsd-audit-milestone 1.0.0` 等价的最小 milestone audit。
-- [ ] 完成初始 Git commit 和 `v1.0.0` tag。
+- [x] 完成初始 Git commit 和 `v1.0.0` tag。
+- [ ] 开启 v1.1 release-prep milestone。
 - [ ] 继续对照真实本机 Codex 数据做视觉数值抽样核对。
 - [ ] 在有 GLM/ZAI 凭据的 App 环境中验证 GLM quota API 口径。
 - [ ] 根据真实 provider 返回补齐更精确的错误分类和字段映射。

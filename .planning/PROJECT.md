@@ -20,7 +20,6 @@ Show local Codex and GLM coding-plan quota status quickly and accurately without
 
 ### Active
 
-- [x] Complete standard GSD review / audit / milestone closeout for v1.0.0.
 - [ ] Validate GLM quota display in the installed App with a real user-provided GLM / ZAI token.
 - [ ] Prepare GitHub and App Store release packaging decisions.
 
@@ -36,7 +35,7 @@ Show local Codex and GLM coding-plan quota status quickly and accurately without
 - Providers: Codex and GLM first, with `UsageProvider` abstraction for future providers.
 - Codex source references: codexU and CodexBar implementation patterns, especially app-server rate limits and `token_count` log extraction.
 - GLM source reference: `glm-plan-usage` quota API approach, implemented directly rather than depending on a local installed command.
-- Current repo state was created before full GSD phase tracking existed; Phase 1 is a retrospective mapping of already implemented v1.0.0 work into GSD structure.
+- Current repo state was created before full GSD phase tracking existed; Phase 1 is a retrospective mapping of already implemented v1.0.0 work into GSD structure. The active v1.0.0 requirements have been archived under `.planning/milestones/`; future work should start with a fresh milestone.
 
 ## Constraints
 
@@ -59,7 +58,7 @@ Show local Codex and GLM coding-plan quota status quickly and accurately without
 
 ## Current State
 
-v1.0.0 Initial Release is implemented, reviewed, verified, audited, and archived in `.planning/milestones/`.
+v1.0.0 Initial Release is implemented, reviewed, verified, audited, archived in `.planning/milestones/`, and ready for release-prep follow-up work.
 
 ## Next Milestone Goals
 
