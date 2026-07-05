@@ -92,6 +92,11 @@ struct ProviderPanelView: View {
                     Text(provider.displayName)
                         .font(.title2.weight(.bold))
                 }
+                Text(statusLine)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
             }
 
             Spacer()
@@ -160,5 +165,15 @@ struct ProviderPanelView: View {
     private var stateIsFailure: Bool {
         if case .failed = state { return true }
         return false
+    }
+
+    private var statusLine: String {
+        if case .failed(let message) = state {
+            return message
+        }
+        if let message = snapshot?.statusMessage, !message.isEmpty {
+            return message
+        }
+        return state.label
     }
 }

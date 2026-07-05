@@ -21,7 +21,8 @@ struct CodexProvider: UsageProvider, Sendable {
         let sevenDays = tokenEvents.aggregate(since: calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now)
         let month = tokenEvents.aggregate(since: calendar.startOfMonth(for: now))
         let total = tokenEvents.aggregate(since: .distantPast)
-        let rateWindows = readRateLimitWindows(codexRoot: codexRoot)
+        let rateLimitResult = readRateLimitWindows(codexRoot: codexRoot)
+        let rateWindows = rateLimitResult.windows
         let resetCreditsCard = await CodexResetCreditsClient(codexRoot: codexRoot).usageCard()
 
         if tokenEvents.isEmpty && rateWindows.allSatisfy({ $0.resetText == "未连接" }) {
@@ -41,24 +42,39 @@ struct CodexProvider: UsageProvider, Sendable {
             windows: rateWindows,
             cards: cards,
             progress: PlanProgress.codex(value: month.estimatedCostUSD),
-            statusMessage: "本机读取 ~/.codex 数据"
+            statusMessage: rateLimitResult.statusMessage
         )
     }
 
-    private func readRateLimitWindows(codexRoot: URL) -> [UsageWindow] {
-        if let snapshot = CodexAppServerRateLimitReader().latestSnapshot() {
-            return snapshot.windows
+    private func readRateLimitWindows(codexRoot: URL) -> CodexRateLimitReadResult {
+        let appServer = CodexAppServerRateLimitReader().latestResult()
+        if let snapshot = appServer.snapshot {
+            return CodexRateLimitReadResult(windows: snapshot.windows, statusMessage: "Codex app-server 已连接")
         }
 
         if let snapshot = CodexRateLimitLogReader(codexRoot: codexRoot).latestSnapshot() {
-            return snapshot.windows
+            let windows = snapshot.windows(discardExpiredBefore: Date())
+            if windows.contains(where: { $0.resetText != "未连接" }) {
+                return CodexRateLimitReadResult(
+                    windows: windows,
+                    statusMessage: "Codex app-server 未连接，使用本机 session 日志：\(appServer.statusMessage)"
+                )
+            }
         }
 
-        return [
-            .placeholder(id: "5h", label: "5 小时"),
-            .placeholder(id: "7d", label: "7 天")
-        ]
+        return CodexRateLimitReadResult(
+            windows: [
+                .placeholder(id: "5h", label: "5 小时"),
+                .placeholder(id: "7d", label: "7 天")
+            ],
+            statusMessage: "Codex app-server 未连接：\(appServer.statusMessage)"
+        )
     }
+}
+
+struct CodexRateLimitReadResult: Equatable, Sendable {
+    var windows: [UsageWindow]
+    var statusMessage: String
 }
 
 struct CodexResetCredit: Equatable, Sendable {
@@ -607,20 +623,24 @@ struct CodexRateLimitSnapshot: Equatable, Sendable {
     var planType: String?
 
     var windows: [UsageWindow] {
+        windows(discardExpiredBefore: nil)
+    }
+
+    func windows(discardExpiredBefore now: Date?) -> [UsageWindow] {
         [
-            UsageWindow(
+            window(
                 id: "5h",
                 label: "5 小时",
-                remainingPercent: max(0, 100 - primaryUsedPercent),
                 usedPercent: primaryUsedPercent,
-                resetText: primaryResetsAt.map(Self.resetText) ?? "未知"
+                resetsAt: primaryResetsAt,
+                discardExpiredBefore: now
             ),
-            UsageWindow(
+            window(
                 id: "7d",
                 label: "7 天",
-                remainingPercent: max(0, 100 - secondaryUsedPercent),
                 usedPercent: secondaryUsedPercent,
-                resetText: secondaryResetsAt.map(Self.resetText) ?? "未知"
+                resetsAt: secondaryResetsAt,
+                discardExpiredBefore: now
             )
         ]
     }
@@ -628,18 +648,45 @@ struct CodexRateLimitSnapshot: Equatable, Sendable {
     private static func resetText(_ date: Date) -> String {
         RadarFormatters.resetDateTime(date)
     }
+
+    private func window(id: String, label: String, usedPercent: Double, resetsAt: Date?, discardExpiredBefore now: Date?) -> UsageWindow {
+        if let now, let resetsAt, resetsAt <= now {
+            return .placeholder(id: id, label: label)
+        }
+
+        return UsageWindow(
+            id: id,
+            label: label,
+            remainingPercent: max(0, 100 - usedPercent),
+            usedPercent: usedPercent,
+            resetText: resetsAt.map(Self.resetText) ?? "未知"
+        )
+    }
 }
 
 struct CodexAppServerRateLimitReader: Sendable {
+    struct Result: Equatable, Sendable {
+        var snapshot: CodexRateLimitSnapshot?
+        var statusMessage: String
+    }
+
     func latestSnapshot() -> CodexRateLimitSnapshot? {
+        latestResult().snapshot
+    }
+
+    func latestResult() -> Result {
         guard let codexPath = CommandRunner.firstExecutable(candidates: [
             "/Applications/Codex.app/Contents/Resources/codex",
+            "~/.codex/bin/codex",
             "~/.local/bin/codex",
+            "~/.npm-global/bin/codex",
+            "~/.bun/bin/codex",
+            "~/.yarn/bin/codex",
             "/opt/homebrew/bin/codex",
             "/usr/local/bin/codex",
             "/usr/bin/codex"
-        ]) else {
-            return nil
+        ], shellCommandNames: ["codex"]) else {
+            return Result(snapshot: nil, statusMessage: "找不到 codex 可执行文件")
         }
         let requests: [[String: Any]] = [[
             "id": 1,
@@ -648,7 +695,7 @@ struct CodexAppServerRateLimitReader: Sendable {
                 "clientInfo": [
                     "name": "quota-radar",
                     "title": "Quota Radar",
-                    "version": "1.0.1"
+                    "version": "1.0.2"
                 ],
                 "capabilities": [
                     "experimentalApi": true,
@@ -666,34 +713,104 @@ struct CodexAppServerRateLimitReader: Sendable {
             }
             .joined(separator: "\n") + "\n"
 
-        guard let result = try? CommandRunner().run(codexPath, arguments: ["app-server"], stdin: stdin, timeout: 3),
-              result.status == 0 || !result.stdout.isEmpty else {
-            return nil
+        let result: CommandResult
+        do {
+            result = try CommandRunner().run(codexPath, arguments: ["app-server"], stdin: stdin, timeout: 12, stdinCloseDelay: 2)
+        } catch {
+            return Result(snapshot: nil, statusMessage: error.localizedDescription)
         }
 
+        guard result.status == 0 || !result.stdout.isEmpty else {
+            return Result(snapshot: nil, statusMessage: "app-server 退出 \(result.status)\(Self.shortError(result.stderr))")
+        }
+
+        var responseSummary: String?
         for line in result.stdout.split(separator: "\n") {
             guard let data = String(line).data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  object["id"] as? Int == 3,
-                  let payload = object["result"] as? [String: Any],
-                  let snapshot = CodexAppServerRateLimitParser.parse(payload) else {
+                  object["id"] as? Int == 3 else {
                 continue
             }
-            return snapshot
+
+            if let error = object["error"] as? [String: Any] {
+                return Result(snapshot: nil, statusMessage: "app-server 错误：\(Self.errorMessage(error))")
+            }
+
+            guard let payload = object["result"] else {
+                responseSummary = "id=3 无 result，keys=\(Self.keyList(object))"
+                continue
+            }
+
+            if let payload = payload as? [String: Any],
+               let snapshot = CodexAppServerRateLimitParser.parse(payload) {
+                return Result(snapshot: snapshot, statusMessage: "已连接 \(codexPath)")
+            }
+
+            responseSummary = "id=3 result \(Self.shapeDescription(payload))"
         }
-        return nil
+
+        if let responseSummary {
+            return Result(snapshot: nil, statusMessage: "app-server 返回未识别：\(responseSummary)")
+        }
+        return Result(snapshot: nil, statusMessage: "app-server 未返回 Codex 额度；stdout=\(Self.stdoutSummary(result.stdout))\(Self.shortError(result.stderr))")
+    }
+
+    private static func shortError(_ text: String) -> String {
+        guard let line = text
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            return ""
+        }
+        return "：\(String(line.prefix(80)))"
+    }
+
+    private static func errorMessage(_ error: [String: Any]) -> String {
+        if let message = error["message"] as? String, !message.isEmpty {
+            return String(message.prefix(120))
+        }
+        return "keys=\(keyList(error))"
+    }
+
+    private static func shapeDescription(_ value: Any) -> String {
+        if let dictionary = value as? [String: Any] {
+            return "object keys=\(keyList(dictionary))"
+        }
+        if let array = value as? [Any] {
+            return "array count=\(array.count)"
+        }
+        return String(describing: type(of: value))
+    }
+
+    private static func keyList(_ dictionary: [String: Any]) -> String {
+        dictionary.keys.sorted().prefix(8).joined(separator: ",")
+    }
+
+    private static func stdoutSummary(_ text: String) -> String {
+        let summaries = text
+            .split(separator: "\n")
+            .prefix(6)
+            .map { line -> String in
+                guard let data = String(line).data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return "non-json"
+                }
+                let id = object["id"].map { "id=\($0)" } ?? "no-id"
+                let method = (object["method"] as? String).map { "method=\($0)" }
+                let keys = "keys=\(keyList(object))"
+                return [id, method, keys].compactMap { $0 }.joined(separator: "/")
+            }
+
+        if summaries.isEmpty {
+            return "empty"
+        }
+        return summaries.joined(separator: ";")
     }
 }
 
 enum CodexAppServerRateLimitParser {
     static func parse(_ result: [String: Any]) -> CodexRateLimitSnapshot? {
-        let selected: [String: Any]?
-        if let byId = result["rateLimitsByLimitId"] as? [String: Any],
-           let codex = byId["codex"] as? [String: Any] {
-            selected = codex
-        } else {
-            selected = result["rateLimits"] as? [String: Any]
-        }
+        let selected = selectedLimits(from: result)
 
         guard let limits = selected else { return nil }
         return CodexRateLimitSnapshot(
@@ -705,12 +822,33 @@ enum CodexAppServerRateLimitParser {
         )
     }
 
+    private static func selectedLimits(from result: [String: Any]) -> [String: Any]? {
+        for key in ["rateLimitsByLimitId", "rate_limits_by_limit_id", "limitsByLimitId", "limits_by_limit_id"] {
+            if let byId = result[key] as? [String: Any],
+               let codex = byId["codex"] as? [String: Any] {
+                return codex
+            }
+        }
+
+        for key in ["rateLimits", "rate_limits", "limits"] {
+            if let limits = result[key] as? [String: Any] {
+                return limits
+            }
+        }
+
+        if result["primary"] is [String: Any] || result["secondary"] is [String: Any] {
+            return result
+        }
+
+        return nil
+    }
+
     private static func parseWindow(_ value: Any?) -> (usedPercent: Double, resetsAt: Date?)? {
         guard let object = value as? [String: Any],
-              let used = doubleValue(object["usedPercent"]) else {
+              let used = doubleValue(object["usedPercent"] ?? object["used_percent"]) else {
             return nil
         }
-        let reset = doubleValue(object["resetsAt"]).map { Date(timeIntervalSince1970: $0) }
+        let reset = doubleValue(object["resetsAt"] ?? object["resets_at"]).map { Date(timeIntervalSince1970: $0) }
         return (used, reset)
     }
 }

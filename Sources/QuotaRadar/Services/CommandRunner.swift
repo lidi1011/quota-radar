@@ -19,7 +19,7 @@ enum CommandRunnerError: LocalizedError, Equatable {
 }
 
 struct CommandRunner {
-    func run(_ launchPath: String, arguments: [String] = [], stdin: String? = nil, timeout: TimeInterval = 5) throws -> CommandResult {
+    func run(_ launchPath: String, arguments: [String] = [], stdin: String? = nil, timeout: TimeInterval = 5, stdinCloseDelay: TimeInterval = 0) throws -> CommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
@@ -40,6 +40,9 @@ struct CommandRunner {
             try process.run()
             if let data = stdin.data(using: .utf8) {
                 inputPipe.fileHandleForWriting.write(data)
+            }
+            if stdinCloseDelay > 0 {
+                Thread.sleep(forTimeInterval: stdinCloseDelay)
             }
             try? inputPipe.fileHandleForWriting.close()
         } else {
@@ -78,11 +81,45 @@ struct CommandRunner {
         return CommandResult(status: process.terminationStatus, stdout: stdout, stderr: stderr)
     }
 
-    static func firstExecutable(candidates: [String]) -> String? {
+    static func firstExecutable(candidates: [String], shellCommandNames: [String] = []) -> String? {
         let fileManager = FileManager.default
-        return candidates.first { path in
+        if let candidate = candidates.first(where: { path in
             fileManager.isExecutableFile(atPath: NSString(string: path).expandingTildeInPath)
-        }?.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
+        }) {
+            return NSString(string: candidate).expandingTildeInPath
+        }
+
+        for commandName in shellCommandNames {
+            if let path = executableFromLoginShell(named: commandName) {
+                return path
+            }
+        }
+        return nil
+    }
+
+    private static func executableFromLoginShell(named commandName: String) -> String? {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-")
+        guard commandName.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+
+        guard let result = try? CommandRunner().run(
+            "/bin/zsh",
+            arguments: ["-lc", "command -v \(commandName)"],
+            timeout: 2
+        ), result.status == 0 else {
+            return nil
+        }
+
+        guard let firstLine = result.stdout
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .first else {
+            return nil
+        }
+
+        let expanded = NSString(string: firstLine).expandingTildeInPath
+        return FileManager.default.isExecutableFile(atPath: expanded) ? expanded : nil
     }
 }
 

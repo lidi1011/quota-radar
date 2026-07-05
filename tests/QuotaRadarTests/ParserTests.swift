@@ -93,6 +93,43 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.windows.last?.remainingPercent, 39)
     }
 
+    func testCodexAppServerRateLimitParserAcceptsSnakeCasePayload() {
+        let result: [String: Any] = [
+            "rate_limits_by_limit_id": [
+                "codex": [
+                    "limitId": "codex",
+                    "primary": ["used_percent": 8.0, "resets_at": 1_782_531_915.0],
+                    "secondary": ["used_percent": 25.0, "resets_at": 1_782_957_624.0]
+                ]
+            ]
+        ]
+
+        let snapshot = CodexAppServerRateLimitParser.parse(result)
+
+        XCTAssertEqual(snapshot?.primaryUsedPercent, 8)
+        XCTAssertEqual(snapshot?.secondaryUsedPercent, 25)
+    }
+
+    func testCodexRateLimitSnapshotDiscardsExpiredLogWindows() {
+        let now = Date(timeIntervalSince1970: 1_782_600_000)
+        let snapshot = CodexRateLimitSnapshot(
+            primaryUsedPercent: 60,
+            primaryResetsAt: now.addingTimeInterval(-60),
+            secondaryUsedPercent: 25,
+            secondaryResetsAt: now.addingTimeInterval(86_400),
+            planType: "Codex"
+        )
+
+        let windows = snapshot.windows(discardExpiredBefore: now)
+
+        XCTAssertEqual(windows.first?.id, "5h")
+        XCTAssertEqual(windows.first?.usedPercent, 0)
+        XCTAssertEqual(windows.first?.resetText, "未连接")
+        XCTAssertEqual(windows.last?.id, "7d")
+        XCTAssertEqual(windows.last?.usedPercent, 25)
+        XCTAssertNotEqual(windows.last?.resetText, "未连接")
+    }
+
     func testCodexResetCreditsParserExtractsIssuedAndExpiryDates() throws {
         let data = """
         {
