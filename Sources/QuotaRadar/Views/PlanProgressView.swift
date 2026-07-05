@@ -28,7 +28,7 @@ struct PlanProgressView: View {
 
                     ForEach(progress.markers) { marker in
                         Circle()
-                            .fill(Color(hex: "#A78BFA"))
+                            .fill(Color(hex: markerColorHex(marker.id)))
                             .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 1))
                             .frame(width: 12, height: 12)
                             .offset(x: max(0, min(geometry.size.width - 12, geometry.size.width * marker.position)))
@@ -53,5 +53,14 @@ struct PlanProgressView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
+    }
+
+    private func markerColorHex(_ id: String) -> String {
+        switch id {
+        case "plus": "#60A5FA"
+        case "pro100": "#2563EB"
+        case "pro200": "#8B5CF6"
+        default: accentHex
+        }
     }
 }

@@ -11,19 +11,23 @@ struct UsageCardView: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(card.trailingValue)
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                if !card.trailingValue.isEmpty {
+                    Text(card.trailingValue)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Text(card.primaryValue)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: primaryFontSize, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
 
             if card.id == .planProgress {
                 PlanProgressCardBody(progress: card.progress, note: card.note, accentHex: accentHex)
+            } else if card.id == .resetCredits {
+                ResetCreditsCardBody(note: card.note)
             } else if let breakdown = card.breakdown {
                 TokenBreakdownBar(breakdown: breakdown, accentHex: accentHex)
                 TokenLegend(breakdown: breakdown)
@@ -49,6 +53,33 @@ struct UsageCardView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
+    }
+
+    private var primaryFontSize: CGFloat {
+        card.id == .planProgress ? 30 : 34
+    }
+}
+
+private struct ResetCreditsCardBody: View {
+    var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let note, !note.isEmpty {
+                ForEach(Array(note.split(separator: "\n").prefix(3).enumerated()), id: \.offset) { _, line in
+                    Text(String(line))
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            } else {
+                Text("暂无可用重置卡")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -122,9 +153,9 @@ private struct PlanProgressCardBody: View {
 
     private func markerColorHex(_ id: String) -> String {
         switch id {
-        case "plus": accentHex
-        case "pro100": "#8B5CF6"
-        case "pro200": "#6EA8FE"
+        case "plus": "#60A5FA"
+        case "pro100": "#2563EB"
+        case "pro200": "#8B5CF6"
         default: accentHex
         }
     }

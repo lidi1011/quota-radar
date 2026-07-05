@@ -109,7 +109,8 @@ private extension ProviderSnapshot {
             cards = [
                 UsageCard(id: .today, title: "今日", systemImage: "sun.max.fill", primaryValue: "0", trailingValue: "$0.00", breakdown: .zero, note: message),
                 UsageCard(id: .sevenDays, title: "近 7 天", systemImage: "calendar", primaryValue: "0", trailingValue: "$0.00", breakdown: .zero, note: nil),
-                UsageCard(id: .total, title: "累计", systemImage: "sum", primaryValue: "0", trailingValue: "$0.00", breakdown: .zero, note: nil)
+                UsageCard(id: .total, title: "累计", systemImage: "sum", primaryValue: "0", trailingValue: "$0.00", breakdown: .zero, note: nil),
+                UsageCard(id: .resetCredits, title: "重置次数", systemImage: "arrow.counterclockwise.circle", primaryValue: "--", trailingValue: "", breakdown: nil, note: message)
             ]
             progress = PlanProgress(title: "羊毛进度", currentValue: "$0.00", maxValue: "$46.5K", progress: 0, markers: PlanProgress.codexMarkers)
         case .glm:
@@ -121,7 +122,7 @@ private extension ProviderSnapshot {
                 UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: "0%", trailingValue: "未连接", breakdown: nil, note: message),
                 UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: "0%", trailingValue: "新版套餐", breakdown: nil, note: nil),
                 UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: "0/0", trailingValue: "工具调用", breakdown: nil, note: nil),
-                UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: "1x", trailingValue: "常规", breakdown: nil, note: nil)
+                UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: GLMMultiplierCalculator.currentInfo().displayValue, trailingValue: "premium", breakdown: nil, note: message)
             ]
             progress = nil
         }

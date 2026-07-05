@@ -25,7 +25,7 @@ struct QuotaRadarApp: App {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(store)
-                .frame(minWidth: 420, minHeight: 620)
+                .frame(minWidth: 420, minHeight: 360)
                 .task {
                     await store.refreshAll(force: true)
                     store.startAutoRefresh()

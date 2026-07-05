@@ -54,6 +54,11 @@ enum DateParser {
         if let date = iso.date(from: value) {
             return date
         }
+        let fractionalISO = ISO8601DateFormatter()
+        fractionalISO.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalISO.date(from: value) {
+            return date
+        }
         if let seconds = TimeInterval(value) {
             return Date(timeIntervalSince1970: seconds)
         }

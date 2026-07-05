@@ -29,6 +29,7 @@ struct GLMProvider: UsageProvider, Sendable {
         let token = stats.tokenUsage
         let weekly = stats.weeklyUsage
         let mcp = stats.mcpUsage
+        let multiplier = GLMMultiplierCalculator.currentInfo()
 
         let windows = [
             UsageWindow(
@@ -51,7 +52,7 @@ struct GLMProvider: UsageProvider, Sendable {
             UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: token?.usageText),
             UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: weekly?.usageText ?? "新版套餐用户才会返回"),
             UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: mcp.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "TIME_LIMIT", breakdown: nil, note: mcp?.ratioText),
-            UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: "API", trailingValue: stats.platformLabel, breakdown: nil, note: "内置读取 /monitor/usage/quota/limit")
+            UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: multiplier.displayValue, trailingValue: multiplier.periodLabel, breakdown: nil, note: multiplier.note(platform: stats.platformLabel))
         ]
 
         return ProviderSnapshot(
@@ -207,6 +208,124 @@ struct GLMQuotaUsage: Codable, Equatable, Sendable {
 
     var ratioText: String {
         "\(used)/\(limit)"
+    }
+}
+
+struct GLMMultiplierInfo: Equatable, Sendable {
+    var value: Double
+    var periodLabel: String
+    var modelID: String
+    var peakWindow: String
+
+    var displayValue: String {
+        GLMMultiplierCalculator.format(value)
+    }
+
+    func note(platform: String) -> String {
+        "premium 模型 · \(modelID) · \(peakWindow) UTC+8 · \(platform)"
+    }
+}
+
+enum GLMMultiplierCalculator {
+    private static let premiumModels = ["glm-5", "glm-5.1", "glm-5.2", "glm-5-turbo"]
+    private static let defaultModelID = "glm-5.2"
+    private static let peakStart = "14:00"
+    private static let peakEnd = "18:00"
+    private static let peak = 3.0
+    private static let offPeak = 2.0
+    private static let promoOffPeak = 1.0
+    private static let promoExpires = "2026-09-30"
+    private static let utcPlus8: TimeZone = TimeZone(secondsFromGMT: 8 * 60 * 60) ?? .current
+
+    static func currentInfo(date: Date = Date(), modelID: String = defaultModelID) -> GLMMultiplierInfo {
+        let value = calculate(date: date, modelID: modelID)
+        return GLMMultiplierInfo(
+            value: value,
+            periodLabel: periodLabel(date: date, value: value),
+            modelID: modelID,
+            peakWindow: "\(peakStart)-\(peakEnd)"
+        )
+    }
+
+    static func calculate(date: Date, modelID: String?) -> Double {
+        guard let modelID, isPremium(modelID) else { return 1.0 }
+        guard let isPeak = isPeakTime(date) else { return 1.0 }
+        if isPeak {
+            return peak
+        }
+        return isPromoActive(date) ? promoOffPeak : offPeak
+    }
+
+    static func format(_ value: Double) -> String {
+        if value.rounded(.down) == value {
+            return "\(Int(value))x"
+        }
+        return "\(value)x"
+    }
+
+    private static func isPremium(_ modelID: String) -> Bool {
+        let lowercased = modelID.lowercased()
+        return premiumModels.contains { lowercased.contains($0.lowercased()) }
+    }
+
+    private static func isPeakTime(_ date: Date) -> Bool? {
+        guard let start = minutes(from: peakStart), let end = minutes(from: peakEnd) else {
+            return nil
+        }
+        let calendar = calendarUTC8
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        guard let hour = components.hour, let minute = components.minute else {
+            return nil
+        }
+        let current = hour * 60 + minute
+        return current >= start && current <= end
+    }
+
+    private static func isPromoActive(_ date: Date) -> Bool {
+        guard let expiry = promoExpiryDate else { return false }
+        let calendar = calendarUTC8
+        return calendar.startOfDay(for: date) <= calendar.startOfDay(for: expiry)
+    }
+
+    private static func minutes(from value: String) -> Int? {
+        let parts = value.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]),
+              (0...23).contains(hour),
+              (0...59).contains(minute) else {
+            return nil
+        }
+        return hour * 60 + minute
+    }
+
+    private static var promoExpiryDate: Date? {
+        var components = DateComponents()
+        components.calendar = calendarUTC8
+        components.timeZone = utcPlus8
+        components.year = 2026
+        components.month = 9
+        components.day = 30
+        components.hour = 23
+        components.minute = 59
+        components.second = 59
+        return components.date
+    }
+
+    private static var calendarUTC8: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utcPlus8
+        return calendar
+    }
+
+    private static func periodLabel(date: Date, value: Double) -> String {
+        if isPeakTime(date) == true {
+            return "高峰"
+        }
+        if value == promoOffPeak, isPromoActive(date) {
+            return "促销"
+        }
+        return "非高峰"
     }
 }
 

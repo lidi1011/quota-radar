@@ -38,6 +38,16 @@ final class AppSettings: ObservableObject {
         providerPreferences[provider] = preferences
     }
 
+    func isProviderVisible(_ provider: ProviderID) -> Bool {
+        preferences(for: provider).isVisible
+    }
+
+    func setProviderVisible(_ visible: Bool, provider: ProviderID) {
+        var preference = preferences(for: provider)
+        preference.isVisible = visible
+        updatePreferences(preference, for: provider)
+    }
+
     func isVisible(_ card: UsageCardID, for provider: ProviderID) -> Bool {
         preferences(for: provider).visibleCards.contains(card)
     }
@@ -60,10 +70,36 @@ final class AppSettings: ObservableObject {
 }
 
 struct ProviderPreferences: Codable, Equatable {
+    var isVisible: Bool
     var ringPrimaryHex: String
     var ringSecondaryHex: String
     var cardAccentHex: String
     var visibleCards: Set<UsageCardID>
+
+    init(isVisible: Bool = true, ringPrimaryHex: String, ringSecondaryHex: String, cardAccentHex: String, visibleCards: Set<UsageCardID>) {
+        self.isVisible = isVisible
+        self.ringPrimaryHex = ringPrimaryHex
+        self.ringSecondaryHex = ringSecondaryHex
+        self.cardAccentHex = cardAccentHex
+        self.visibleCards = visibleCards
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isVisible
+        case ringPrimaryHex
+        case ringSecondaryHex
+        case cardAccentHex
+        case visibleCards
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isVisible = try container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+        ringPrimaryHex = try container.decode(String.self, forKey: .ringPrimaryHex)
+        ringSecondaryHex = try container.decode(String.self, forKey: .ringSecondaryHex)
+        cardAccentHex = try container.decode(String.self, forKey: .cardAccentHex)
+        visibleCards = try container.decode(Set<UsageCardID>.self, forKey: .visibleCards)
+    }
 
     static func defaults(for provider: ProviderID) -> ProviderPreferences {
         switch provider {
@@ -72,7 +108,7 @@ struct ProviderPreferences: Codable, Equatable {
                 ringPrimaryHex: "#1E88FF",
                 ringSecondaryHex: "#8B5CF6",
                 cardAccentHex: "#2563EB",
-                visibleCards: [.today, .sevenDays, .total, .planProgress]
+                visibleCards: [.today, .sevenDays, .total, .planProgress, .resetCredits]
             )
         case .glm:
             ProviderPreferences(
@@ -89,6 +125,13 @@ struct ProviderPreferences: Codable, Equatable {
               let decoded = try? JSONDecoder().decode(ProviderPreferences.self, from: data) else {
             return .defaults(for: provider)
         }
+        if provider == .codex, !defaults.bool(forKey: Keys.codexResetCreditsMigrated) {
+            var migrated = decoded
+            migrated.visibleCards.insert(.resetCredits)
+            migrated.save(provider: provider, defaults: defaults)
+            defaults.set(true, forKey: Keys.codexResetCreditsMigrated)
+            return migrated
+        }
         return decoded
     }
 
@@ -102,6 +145,7 @@ private enum Keys {
     static let refreshIntervalMinutes = "refreshIntervalMinutes"
     static let glmAuthToken = "glmAuthToken"
     static let glmBaseURL = "glmBaseURL"
+    static let codexResetCreditsMigrated = "providerPreferences.codex.resetCreditsMigrated"
 
     static func provider(_ provider: ProviderID) -> String {
         "providerPreferences.\(provider.rawValue)"

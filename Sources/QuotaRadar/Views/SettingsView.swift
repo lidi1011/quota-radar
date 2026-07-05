@@ -7,6 +7,16 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             SettingsPage(title: "通用", subtitle: "刷新节奏和手动同步") {
+                SettingsCard("Provider 展示") {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
+                        ForEach(ProviderID.allCases) { provider in
+                            Toggle(provider.displayName, isOn: providerVisibleBinding(provider))
+                                .toggleStyle(.checkbox)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+
                 SettingsCard("刷新") {
                     SettingsRow(title: "自动刷新间隔", detail: "\(Int(settings.refreshIntervalMinutes)) 分钟") {
                         Stepper("", value: $settings.refreshIntervalMinutes, in: 1...60, step: 1)
@@ -61,6 +71,14 @@ struct SettingsView: View {
             content()
         }
     }
+
+    private func providerVisibleBinding(_ provider: ProviderID) -> Binding<Bool> {
+        Binding {
+            settings.isProviderVisible(provider)
+        } set: { visible in
+            settings.setProviderVisible(visible, provider: provider)
+        }
+    }
 }
 
 private struct ProviderSettingsPage<Extra: View>: View {
@@ -100,7 +118,7 @@ private struct ProviderSettingsPage<Extra: View>: View {
     private var cards: [UsageCardID] {
         switch provider {
         case .codex:
-            [.today, .sevenDays, .total, .planProgress]
+            [.today, .sevenDays, .total, .planProgress, .resetCredits]
         case .glm:
             [.tokenUsage, .weeklyQuota, .mcpUsage, .multiplier]
         }

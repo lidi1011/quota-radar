@@ -4,8 +4,8 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="QuotaRadar"
 BUNDLE_ID="com.lidi.QuotaRadar"
-APP_VERSION="1.0.0"
-BUILD_VERSION="1"
+APP_VERSION="1.0.1"
+BUILD_VERSION="2"
 MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +16,7 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+TMP_DIR="$ROOT_DIR/tmp"
 
 cd "$ROOT_DIR"
 
@@ -28,11 +29,36 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
-if [ -f "$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.icns" ]; then
-  cp "$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.icns" "$APP_RESOURCES/AppIcon.icns"
-elif [ -f "$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.png" ]; then
-  cp "$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.png" "$APP_RESOURCES/AppIcon.png"
-fi
+copy_app_icon() {
+  local source_icns="$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.icns"
+  local source_png="$ROOT_DIR/Sources/QuotaRadar/Resources/AppIcon.png"
+  local iconset="$TMP_DIR/AppIcon.iconset"
+
+  if [ -f "$source_icns" ]; then
+    cp "$source_icns" "$APP_RESOURCES/AppIcon.icns"
+    return
+  fi
+
+  if [ ! -f "$source_png" ]; then
+    return
+  fi
+
+  rm -rf "$iconset"
+  mkdir -p "$iconset"
+  sips -z 16 16 "$source_png" --out "$iconset/icon_16x16.png" >/dev/null
+  sips -z 32 32 "$source_png" --out "$iconset/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32 "$source_png" --out "$iconset/icon_32x32.png" >/dev/null
+  sips -z 64 64 "$source_png" --out "$iconset/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128 "$source_png" --out "$iconset/icon_128x128.png" >/dev/null
+  sips -z 256 256 "$source_png" --out "$iconset/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256 "$source_png" --out "$iconset/icon_256x256.png" >/dev/null
+  sips -z 512 512 "$source_png" --out "$iconset/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512 "$source_png" --out "$iconset/icon_512x512.png" >/dev/null
+  sips -z 1024 1024 "$source_png" --out "$iconset/icon_512x512@2x.png" >/dev/null
+  iconutil -c icns "$iconset" -o "$APP_RESOURCES/AppIcon.icns"
+}
+
+copy_app_icon
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -54,7 +80,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>
-  <string>AppIcon</string>
+  <string>AppIcon.icns</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
@@ -70,6 +96,8 @@ open_app() {
 case "$MODE" in
   run)
     open_app
+    ;;
+  --bundle|bundle)
     ;;
   --debug|debug)
     lldb -- "$APP_BINARY"
@@ -88,7 +116,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--bundle|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

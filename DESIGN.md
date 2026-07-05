@@ -10,6 +10,9 @@ colors:
   glm: "#10B981"
   cache: "#8B5CF6"
   output: "#F59E0B"
+  planPlus: "#60A5FA"
+  planPro100: "#2563EB"
+  planPro200: "#8B5CF6"
   background: "#111318"
   surface: "#24272F"
 typography:
@@ -58,6 +61,7 @@ Quota Radar uses a compact macOS dashboard style: dark material panels, readable
 - **Codex:** Codex rings and emphasis.
 - **GLM:** GLM rings and emphasis.
 - **Cache / Output:** Token breakdown segments.
+- **Plan Plus / Pro100 / Pro200:** Wool-progress subscription markers. Plus uses light blue, Pro100 uses deep blue, and Pro200 uses purple.
 
 ## Typography
 
@@ -77,7 +81,7 @@ Keep radii modest and consistent. Use `rounded.sm` for controls and `rounded.md`
 
 ## Components
 
-Component tokens define reusable visual behavior. Provider card visibility and provider colors are user-configurable in Settings.
+Component tokens define reusable visual behavior. Provider visibility, provider card visibility, and provider colors are user-configurable in Settings.
 
 ## Do's and Don'ts
 

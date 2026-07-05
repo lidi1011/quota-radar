@@ -93,10 +93,52 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.windows.last?.remainingPercent, 39)
     }
 
+    func testCodexResetCreditsParserExtractsIssuedAndExpiryDates() throws {
+        let data = """
+        {
+          "available_count": 2,
+          "credits": [
+            {
+              "id": "do-not-display-this-id",
+              "granted_at": "2026-07-05T02:30:00.385078Z",
+              "expires_at": "2026-07-12T02:30:00.385078Z"
+            },
+            {
+              "createdAt": 1782531915,
+              "expirationTime": 1782957624000
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try CodexResetCreditsParser.parse(data)
+
+        XCTAssertEqual(snapshot.credits.count, 2)
+        XCTAssertEqual(snapshot.usageCard.primaryValue, "2")
+        XCTAssertNotNil(snapshot.credits.first?.issuedAt)
+        XCTAssertNotNil(snapshot.credits.first?.expiresAt)
+        XCTAssertTrue(snapshot.usageCard.note?.contains("发放") == true)
+        XCTAssertFalse(snapshot.usageCard.note?.contains("未知") == true)
+        XCTAssertFalse(snapshot.usageCard.note?.contains("do-not-display-this-id") == true)
+    }
+
+    func testCodexResetCreditsUnauthorizedReturnsSafeCard() async throws {
+        let client = CodexResetCreditsClient {
+            throw CodexResetCreditsError.unauthorized
+        }
+
+        let card = await client.usageCard()
+
+        XCTAssertEqual(card.primaryValue, "--")
+        XCTAssertEqual(card.note, "凭证失效或 Authorization header 不正确")
+    }
+
     func testCompactTokenFormatting() {
         XCTAssertEqual(RadarFormatters.compactTokens(0), "0")
         XCTAssertEqual(RadarFormatters.compactTokens(1_500), "1.5K")
         XCTAssertEqual(RadarFormatters.compactTokens(2_300_000), "2.3M")
+        XCTAssertEqual(RadarFormatters.compactTokens(1_460_700_000), "1.46B")
+        XCTAssertEqual(RadarFormatters.compactTokens(1_000_000_000), "1B")
     }
 
     func testResetFormatterUsesLocalTimeWithoutYear() {
@@ -149,6 +191,66 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(platform?.normalizedBaseURL("https://open.bigmodel.cn/api/anthropic"), "https://open.bigmodel.cn/api")
     }
 
+    func testGLMMultiplierUsesPeakRateForPremiumModel() throws {
+        let date = try dateUTC8(year: 2026, month: 7, day: 5, hour: 15, minute: 0)
+
+        let multiplier = GLMMultiplierCalculator.calculate(date: date, modelID: "glm-5.2")
+
+        XCTAssertEqual(multiplier, 3.0)
+        XCTAssertEqual(GLMMultiplierCalculator.format(multiplier), "3x")
+    }
+
+    func testGLMMultiplierUsesPromoOffPeakRateForPremiumModel() throws {
+        let date = try dateUTC8(year: 2026, month: 7, day: 5, hour: 10, minute: 0)
+
+        let multiplier = GLMMultiplierCalculator.calculate(date: date, modelID: "glm-5.2")
+        let info = GLMMultiplierCalculator.currentInfo(date: date, modelID: "glm-5.2")
+
+        XCTAssertEqual(multiplier, 1.0)
+        XCTAssertEqual(info.displayValue, "1x")
+        XCTAssertEqual(info.periodLabel, "促销")
+    }
+
+    func testGLMMultiplierIgnoresNonPremiumModel() throws {
+        let date = try dateUTC8(year: 2026, month: 7, day: 5, hour: 15, minute: 0)
+
+        let multiplier = GLMMultiplierCalculator.calculate(date: date, modelID: "glm-4")
+
+        XCTAssertEqual(multiplier, 1.0)
+    }
+
+    func testProviderPreferencesDecodesLegacyPayloadAsVisible() throws {
+        let data = """
+        {
+          "ringPrimaryHex": "#1E88FF",
+          "ringSecondaryHex": "#8B5CF6",
+          "cardAccentHex": "#2563EB",
+          "visibleCards": ["today", "sevenDays"]
+        }
+        """.data(using: .utf8)!
+
+        let preferences = try JSONDecoder().decode(ProviderPreferences.self, from: data)
+
+        XCTAssertTrue(preferences.isVisible)
+        XCTAssertEqual(preferences.visibleCards, [.today, .sevenDays])
+    }
+
+    func testCodexPreferencesMigrationAddsResetCreditsCard() {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        ProviderPreferences(
+            ringPrimaryHex: "#1E88FF",
+            ringSecondaryHex: "#8B5CF6",
+            cardAccentHex: "#2563EB",
+            visibleCards: [.today]
+        ).save(provider: .codex, defaults: defaults)
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertTrue(settings.isVisible(.resetCredits, for: .codex))
+    }
+
     func testGLMForceRefreshBypassesCachedStats() async throws {
         let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -187,6 +289,20 @@ final class ParserTests: XCTestCase {
         }
     }
 
+}
+
+private func dateUTC8(year: Int, month: Int, day: Int, hour: Int, minute: Int) throws -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 8 * 60 * 60)!
+    var components = DateComponents()
+    components.calendar = calendar
+    components.timeZone = calendar.timeZone
+    components.year = year
+    components.month = month
+    components.day = day
+    components.hour = hour
+    components.minute = minute
+    return try XCTUnwrap(components.date)
 }
 
 private actor AsyncCounter {

@@ -28,10 +28,20 @@ struct ProviderPanelView: View {
         )
     }
 
+    private var resetCreditsCard: UsageCard? {
+        guard preferences.visibleCards.contains(.resetCredits) else {
+            return nil
+        }
+        return snapshot?.cards.first { $0.id == .resetCredits }
+    }
+
     private var gridCards: [UsageCard] {
-        var cards = visibleCards.filter { $0.id != .planProgress }
+        var cards = visibleCards.filter { $0.id != .planProgress && $0.id != .resetCredits }
         if let progressCard {
             cards.append(progressCard)
+        }
+        if let resetCreditsCard {
+            cards.append(resetCreditsCard)
         }
         return cards
     }
@@ -62,6 +72,7 @@ struct ProviderPanelView: View {
                 }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(20)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

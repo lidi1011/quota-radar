@@ -22,6 +22,7 @@ struct CodexProvider: UsageProvider, Sendable {
         let month = tokenEvents.aggregate(since: calendar.startOfMonth(for: now))
         let total = tokenEvents.aggregate(since: .distantPast)
         let rateWindows = readRateLimitWindows(codexRoot: codexRoot)
+        let resetCreditsCard = await CodexResetCreditsClient(codexRoot: codexRoot).usageCard()
 
         if tokenEvents.isEmpty && rateWindows.allSatisfy({ $0.resetText == "未连接" }) {
             throw ProviderError.dataUnavailable("Codex 本机数据存在，但没有可用的额度或 token 记录。请确认 Codex 至少运行过一次。")
@@ -30,7 +31,8 @@ struct CodexProvider: UsageProvider, Sendable {
         let cards = [
             UsageCard(id: .today, title: "今日", systemImage: "sun.max.fill", primaryValue: RadarFormatters.compactTokens(today.breakdown.total), trailingValue: RadarFormatters.money(today.estimatedCostUSD), breakdown: today.breakdown, note: nil),
             UsageCard(id: .sevenDays, title: "近 7 天", systemImage: "calendar", primaryValue: RadarFormatters.compactTokens(sevenDays.breakdown.total), trailingValue: RadarFormatters.money(sevenDays.estimatedCostUSD), breakdown: sevenDays.breakdown, note: nil),
-            UsageCard(id: .total, title: "累计", systemImage: "sum", primaryValue: RadarFormatters.compactTokens(total.breakdown.total), trailingValue: RadarFormatters.money(total.estimatedCostUSD), breakdown: total.breakdown, note: nil)
+            UsageCard(id: .total, title: "累计", systemImage: "sum", primaryValue: RadarFormatters.compactTokens(total.breakdown.total), trailingValue: RadarFormatters.money(total.estimatedCostUSD), breakdown: total.breakdown, note: nil),
+            resetCreditsCard
         ]
 
         return ProviderSnapshot(
@@ -56,6 +58,231 @@ struct CodexProvider: UsageProvider, Sendable {
             .placeholder(id: "5h", label: "5 小时"),
             .placeholder(id: "7d", label: "7 天")
         ]
+    }
+}
+
+struct CodexResetCredit: Equatable, Sendable {
+    var issuedAt: Date?
+    var expiresAt: Date?
+}
+
+struct CodexResetCreditsSnapshot: Equatable, Sendable {
+    var availableCount: Int?
+    var credits: [CodexResetCredit]
+
+    var usageCard: UsageCard {
+        UsageCard(
+            id: .resetCredits,
+            title: "重置次数",
+            systemImage: "arrow.counterclockwise.circle",
+            primaryValue: "\(availableCount ?? credits.count)",
+            trailingValue: "",
+            breakdown: nil,
+            note: noteText
+        )
+    }
+
+    private var noteText: String {
+        guard !credits.isEmpty else {
+            return "暂无可用重置卡"
+        }
+        return credits
+            .prefix(3)
+            .enumerated()
+            .map { index, credit in
+                let issued = credit.issuedAt.map(RadarFormatters.resetDateTime) ?? "未知"
+                let expires = credit.expiresAt.map(RadarFormatters.resetDateTime) ?? "未知"
+                return "\(index + 1). 发放 \(issued) · 过期 \(expires)"
+            }
+            .joined(separator: "\n")
+    }
+}
+
+struct CodexResetCreditsClient: @unchecked Sendable {
+    private let codexRoot: URL
+    private let session: URLSession
+    private let fetcher: (@Sendable () async throws -> CodexResetCreditsSnapshot)?
+
+    init(codexRoot: URL, session: URLSession = .shared) {
+        self.codexRoot = codexRoot
+        self.session = session
+        self.fetcher = nil
+    }
+
+    init(fetcher: @escaping @Sendable () async throws -> CodexResetCreditsSnapshot) {
+        self.codexRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+        self.session = .shared
+        self.fetcher = fetcher
+    }
+
+    func usageCard() async -> UsageCard {
+        do {
+            return try await fetch().usageCard
+        } catch CodexResetCreditsError.unauthorized {
+            return errorCard("凭证失效或 Authorization header 不正确")
+        } catch CodexResetCreditsError.missingAccessToken {
+            return errorCard("未找到 Codex access_token")
+        } catch {
+            return errorCard("重置次数暂不可用")
+        }
+    }
+
+    func fetch() async throws -> CodexResetCreditsSnapshot {
+        if let fetcher {
+            return try await fetcher()
+        }
+
+        let accessToken = try readAccessToken()
+        guard let url = URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits") else {
+            throw CodexResetCreditsError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CodexResetCreditsError.invalidResponse
+        }
+        if http.statusCode == 401 {
+            throw CodexResetCreditsError.unauthorized
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw CodexResetCreditsError.httpStatus(http.statusCode)
+        }
+        return try CodexResetCreditsParser.parse(data)
+    }
+
+    private func readAccessToken() throws -> String {
+        let authURL = codexRoot.appendingPathComponent("auth.json")
+        let data = try Data(contentsOf: authURL)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tokens = object["tokens"] as? [String: Any],
+              let accessToken = tokens["access_token"] as? String,
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CodexResetCreditsError.missingAccessToken
+        }
+        return accessToken
+    }
+
+    private func errorCard(_ message: String) -> UsageCard {
+        UsageCard(
+            id: .resetCredits,
+            title: "重置次数",
+            systemImage: "arrow.counterclockwise.circle",
+            primaryValue: "--",
+            trailingValue: "",
+            breakdown: nil,
+            note: message
+        )
+    }
+}
+
+enum CodexResetCreditsError: Error, Equatable {
+    case missingAccessToken
+    case invalidURL
+    case invalidResponse
+    case unauthorized
+    case httpStatus(Int)
+}
+
+enum CodexResetCreditsParser {
+    static func parse(_ data: Data) throws -> CodexResetCreditsSnapshot {
+        let object = try JSONSerialization.jsonObject(with: data)
+        let flattened = NumericKeyExtractor.flatten(object)
+        return CodexResetCreditsSnapshot(
+            availableCount: intValue(flattened, keys: ["available_count", "availableCount"]),
+            credits: creditObjects(from: object).map(parseCredit)
+        )
+    }
+
+    private static func creditObjects(from object: Any) -> [[String: Any]] {
+        if let array = object as? [[String: Any]] {
+            return array
+        }
+        guard let dictionary = object as? [String: Any] else {
+            return []
+        }
+        for key in ["credits", "resetCredits", "reset_credits", "rateLimitResetCredits", "rate_limit_reset_credits", "data", "items"] {
+            if let array = dictionary[key] as? [[String: Any]] {
+                return array
+            }
+            if let nested = dictionary[key] as? [String: Any] {
+                let result = creditObjects(from: nested)
+                if !result.isEmpty {
+                    return result
+                }
+            }
+        }
+        return []
+    }
+
+    private static func parseCredit(_ object: [String: Any]) -> CodexResetCredit {
+        let flattened = NumericKeyExtractor.flatten(object)
+        return CodexResetCredit(
+            issuedAt: dateValue(flattened, keys: [
+                "issued_at", "issuedAt", "granted_at", "grantedAt", "grant_time", "grantTime", "created_at", "createdAt", "available_at", "availableAt", "start_time", "startTime"
+            ]),
+            expiresAt: dateValue(flattened, keys: [
+                "expires_at", "expiresAt", "expiration_time", "expirationTime", "expired_at", "expiredAt", "end_time", "endTime"
+            ])
+        )
+    }
+
+    private static func intValue(_ values: [String: Any], keys: [String]) -> Int? {
+        for key in keys {
+            if let value = values[key], let int = parseInt(value) {
+                return int
+            }
+            if let match = values.first(where: { $0.key.hasSuffix(".\(key)") })?.value,
+               let int = parseInt(match) {
+                return int
+            }
+        }
+        return nil
+    }
+
+    private static func parseInt(_ value: Any) -> Int? {
+        if let int = value as? Int { return int }
+        if let double = value as? Double { return Int(double) }
+        if let string = value as? String { return Int(string) }
+        return nil
+    }
+
+    private static func dateValue(_ values: [String: Any], keys: [String]) -> Date? {
+        for key in keys {
+            if let value = values[key], let date = parseDate(value) {
+                return date
+            }
+            if let match = values.first(where: { $0.key.hasSuffix(".\(key)") })?.value,
+               let date = parseDate(match) {
+                return date
+            }
+        }
+        return nil
+    }
+
+    private static func parseDate(_ value: Any) -> Date? {
+        if let string = value as? String {
+            return DateParser.parse(string)
+        }
+        if let int = value as? Int {
+            return dateFromNumeric(TimeInterval(int))
+        }
+        if let double = value as? Double {
+            return dateFromNumeric(double)
+        }
+        return nil
+    }
+
+    private static func dateFromNumeric(_ value: TimeInterval) -> Date {
+        if value > 10_000_000_000 {
+            return Date(timeIntervalSince1970: value / 1000)
+        }
+        return Date(timeIntervalSince1970: value)
     }
 }
 
@@ -421,7 +648,7 @@ struct CodexAppServerRateLimitReader: Sendable {
                 "clientInfo": [
                     "name": "quota-radar",
                     "title": "Quota Radar",
-                    "version": "1.0.0"
+                    "version": "1.0.1"
                 ],
                 "capabilities": [
                     "experimentalApi": true,

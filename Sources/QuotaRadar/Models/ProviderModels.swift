@@ -26,6 +26,7 @@ enum UsageCardID: String, CaseIterable, Codable, Identifiable, Sendable {
     case sevenDays
     case total
     case planProgress
+    case resetCredits
     case tokenUsage
     case weeklyQuota
     case mcpUsage
@@ -39,6 +40,7 @@ enum UsageCardID: String, CaseIterable, Codable, Identifiable, Sendable {
         case .sevenDays: "近 7 天"
         case .total: "累计"
         case .planProgress: "羊毛进度"
+        case .resetCredits: "重置次数"
         case .tokenUsage: "5 小时"
         case .weeklyQuota: "7 天限额"
         case .mcpUsage: "MCP"

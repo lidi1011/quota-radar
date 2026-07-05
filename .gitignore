@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+.codex/
+.planning/
 node_modules/
 .build/
 dist/

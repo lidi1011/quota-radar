@@ -10,6 +10,9 @@ enum RadarFormatters {
 
     static func compactTokens(_ value: Int) -> String {
         let double = Double(value)
+        if value >= 1_000_000_000 {
+            return compactDecimal(double / 1_000_000_000, maxFractionDigits: 2) + "B"
+        }
         if value >= 1_000_000 {
             return String(format: "%.1fM", double / 1_000_000)
         }
@@ -17,6 +20,16 @@ enum RadarFormatters {
             return String(format: "%.1fK", double / 1_000)
         }
         return "\(value)"
+    }
+
+    private static func compactDecimal(_ value: Double, maxFractionDigits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = maxFractionDigits
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.\(maxFractionDigits)f", value)
     }
 
     static func percent(_ value: Double) -> String {
