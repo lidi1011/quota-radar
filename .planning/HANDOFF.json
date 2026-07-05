@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-05T10:19:47+08:00",
+  "context": "default",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": 0,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Implement Quota Radar v1.0.0 macOS app",
+      "status": "done",
+      "commit": "bfbcec4"
+    },
+    {
+      "id": 2,
+      "name": "Complete v1.0.0 milestone closeout",
+      "status": "done",
+      "commit": "bfb3a2b"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 1,
+      "name": "Start v1.1 release-prep milestone with fresh requirements",
+      "status": "not_started"
+    },
+    {
+      "id": 2,
+      "name": "Validate GLM quota display in the installed app with real GLM/ZAI credentials",
+      "status": "waiting_on_human"
+    },
+    {
+      "id": 3,
+      "name": "Plan GitHub release and App Store signing/packaging path",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "GLM real-account validation requires user-provided GLM/ZAI token or environment variables.",
+      "type": "human_action",
+      "workaround": "App shows a provider-level credential error until credentials are configured."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Provide GLM/ZAI token in App settings or configure ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL for real-account validation.",
+      "context": "Needed only to verify real GLM quota display; not required for v1.0.0 source/build completion.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Ship v1.0.0 as a normal Dock app, not a codexU-style floating desktop window.",
+      "rationale": "The requested product shape is a standard macOS app with Dock, menu bar, traffic-light controls, and resize behavior.",
+      "phase": "1"
+    },
+    {
+      "decision": "Archive v1.0.0 requirements and delete the active REQUIREMENTS.md.",
+      "rationale": "complete-milestone expects fresh requirements for the next milestone.",
+      "phase": "1"
+    },
+    {
+      "decision": "Keep v1.0.0 tag on the milestone completion commit, not on later pause/handoff commits.",
+      "rationale": "The tag should represent the release/milestone state; handoff commits are operational metadata after the release point.",
+      "phase": "1"
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Run $gsd-new-milestone to define v1.1 Release Prep requirements and roadmap.",
+  "context_notes": "v1.0.0 is implemented, reviewed, audited, verified, archived, committed, and tagged. The working tree was clean before this pause handoff except ignored build/dist/.DS_Store files."
+}

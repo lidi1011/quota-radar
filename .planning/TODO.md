@@ -21,6 +21,7 @@
 - [x] 统一 1.0.0 发布元数据：Codex app-server client version、`CFBundleShortVersionString`、`CFBundleVersion`。
 - [x] 补齐最小 milestone 文件：audit、roadmap archive、requirements archive、MILESTONES/STATE/PROJECT 收口。
 - [x] 运行 `$gsd-complete-milestone 1.0.0`，归档 audit，压缩 ROADMAP，删除活动 REQUIREMENTS。
+- [x] 运行 `$gsd-pause-work`，生成 `.planning/HANDOFF.json` 和 `.planning/.continue-here.md`。
 
 ## 后续 backlog
 

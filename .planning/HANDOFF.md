@@ -45,6 +45,7 @@
 - 分支：master。
 - 最近验证（2026-07-05 03:12 fresh run）：`swift test` 通过，14 个测试、0 failures；`swift build` 通过，exit 0；`./script/build_and_run.sh --verify` 通过，exit 0，并确认 QuotaRadar 进程可启动。`dist/QuotaRadar.app/Contents/Info.plist` 已确认包含 `CFBundleShortVersionString=1.0.0` 和 `CFBundleVersion=1`。
 - 当前阻塞：GLM quota API 仍需要在有 GLM/ZAI 凭据的 App 环境中继续验证；无凭据时 UI 会显示错误态。
+- 暂停交接：`.planning/HANDOFF.json` 和 `.planning/.continue-here.md` 已记录 v1.0.0 完成态；下一次恢复应从 `$gsd-new-milestone` 开始。
 
 ## 下一步
 
@@ -57,3 +58,4 @@
 - 不要只依赖聊天记录恢复上下文。
 - 新 agent 接手前先执行 `git status`，再阅读本文件。
 - 不要把 GLM token、cookie 或私有账号信息写进仓库。
+- 不要因为 pause handoff 提交而移动 `v1.0.0` tag；tag 应保持指向 milestone completion 提交。
