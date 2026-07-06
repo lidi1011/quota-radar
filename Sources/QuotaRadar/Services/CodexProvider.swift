@@ -3,9 +3,11 @@ import Foundation
 struct CodexProvider: UsageProvider, Sendable {
     let id: ProviderID = .codex
     private let home: URL
+    private let manualSubscriptionRule: ManualSubscriptionRule?
 
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, manualSubscriptionRule: ManualSubscriptionRule? = nil) {
         self.home = home
+        self.manualSubscriptionRule = manualSubscriptionRule
     }
 
     func snapshot(force: Bool) async throws -> ProviderSnapshot {
@@ -24,6 +26,11 @@ struct CodexProvider: UsageProvider, Sendable {
         let rateLimitResult = readRateLimitWindows(codexRoot: codexRoot)
         let rateWindows = rateLimitResult.windows
         let resetCreditsCard = await CodexResetCreditsClient(codexRoot: codexRoot).usageCard()
+        let subscriptionInfo = await CodexSubscriptionReader(codexRoot: codexRoot).subscriptionInfo()
+        let subscription = SubscriptionInfoResolver.resolve(
+            automatic: subscriptionInfo,
+            manualRule: manualSubscriptionRule
+        )
 
         if tokenEvents.isEmpty && rateWindows.allSatisfy({ $0.resetText == "未连接" }) {
             throw ProviderError.dataUnavailable("Codex 本机数据存在，但没有可用的额度或 token 记录。请确认 Codex 至少运行过一次。")
@@ -33,7 +40,8 @@ struct CodexProvider: UsageProvider, Sendable {
             UsageCard(id: .today, title: "今日", systemImage: "sun.max.fill", primaryValue: RadarFormatters.compactTokens(today.breakdown.total), trailingValue: RadarFormatters.money(today.estimatedCostUSD), breakdown: today.breakdown, note: nil),
             UsageCard(id: .sevenDays, title: "近 7 天", systemImage: "calendar", primaryValue: RadarFormatters.compactTokens(sevenDays.breakdown.total), trailingValue: RadarFormatters.money(sevenDays.estimatedCostUSD), breakdown: sevenDays.breakdown, note: nil),
             UsageCard(id: .total, title: "累计", systemImage: "sum", primaryValue: RadarFormatters.compactTokens(total.breakdown.total), trailingValue: RadarFormatters.money(total.estimatedCostUSD), breakdown: total.breakdown, note: nil),
-            resetCreditsCard
+            resetCreditsCard,
+            subscription.usageCard()
         ]
 
         return ProviderSnapshot(

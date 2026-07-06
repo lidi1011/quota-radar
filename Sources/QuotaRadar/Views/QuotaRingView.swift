@@ -4,23 +4,21 @@ struct QuotaRingView: View {
     var windows: [UsageWindow]
     var primaryHex: String
     var secondaryHex: String
-
-    private let ringLineWidth: CGFloat = 22
-    private let innerRingSize: CGFloat = 148
+    var layout: LayoutPreset
 
     var body: some View {
         ZStack {
-            ringBackground(lineWidth: ringLineWidth)
+            ringBackground(lineWidth: layout.ringLineWidth)
 
             if let first = windows.first {
-                ring(value: first.remainingPercent / 100, color: Color(hex: primaryHex), lineWidth: ringLineWidth)
+                ring(value: first.remainingPercent / 100, color: Color(hex: primaryHex), lineWidth: layout.ringLineWidth)
             }
 
-            ringBackground(lineWidth: ringLineWidth)
+            ringBackground(lineWidth: layout.ringLineWidth)
                 .frame(width: innerRingSize, height: innerRingSize)
 
             if windows.count > 1 {
-                ring(value: windows[1].remainingPercent / 100, color: Color(hex: secondaryHex), lineWidth: ringLineWidth)
+                ring(value: windows[1].remainingPercent / 100, color: Color(hex: secondaryHex), lineWidth: layout.ringLineWidth)
                     .frame(width: innerRingSize, height: innerRingSize)
             }
 
@@ -29,13 +27,17 @@ struct QuotaRingView: View {
                     HStack(spacing: 6) {
                         Text(window.label)
                             .foregroundStyle(index == 0 ? Color(hex: primaryHex) : Color(hex: secondaryHex))
-                            .font(.callout.weight(.bold))
+                            .font(layout.ringLabelFont)
                         Text(RadarFormatters.percent(window.remainingPercent))
-                            .font(.title2.monospacedDigit().weight(.bold))
+                            .font(layout.ringValueFont)
                     }
                 }
             }
         }
+    }
+
+    private var innerRingSize: CGFloat {
+        layout.ringSize * 0.67
     }
 
     private func ringBackground(lineWidth: CGFloat) -> some View {

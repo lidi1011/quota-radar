@@ -4,12 +4,14 @@ struct GLMProvider: UsageProvider, Sendable {
     let id: ProviderID = .glm
     private let authToken: String
     private let configuredBaseURL: String
+    private let manualSubscriptionRule: ManualSubscriptionRule?
     private let cache: GLMQuotaCache
     private let client: GLMQuotaClient
 
     init(settings: AppSettings, cache: GLMQuotaCache, client: GLMQuotaClient = GLMQuotaClient()) {
         self.authToken = settings.glmAuthToken
         self.configuredBaseURL = settings.glmBaseURL
+        self.manualSubscriptionRule = settings.glmManualSubscriptionRule
         self.cache = cache
         self.client = client
     }
@@ -30,6 +32,10 @@ struct GLMProvider: UsageProvider, Sendable {
         let weekly = stats.weeklyUsage
         let mcp = stats.mcpUsage
         let multiplier = GLMMultiplierCalculator.currentInfo()
+        let subscription = SubscriptionInfoResolver.resolve(
+            automatic: stats.subscriptionInfo,
+            manualRule: manualSubscriptionRule
+        )
 
         let windows = [
             UsageWindow(
@@ -52,7 +58,8 @@ struct GLMProvider: UsageProvider, Sendable {
             UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: token?.usageText),
             UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: weekly?.usageText ?? "新版套餐用户才会返回"),
             UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: mcp.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "TIME_LIMIT", breakdown: nil, note: mcp?.ratioText),
-            UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: multiplier.displayValue, trailingValue: multiplier.periodLabel, breakdown: nil, note: multiplier.note(platform: stats.platformLabel))
+            UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: multiplier.displayValue, trailingValue: multiplier.periodLabel, breakdown: nil, note: multiplier.note(platform: stats.platformLabel)),
+            subscription.usageCard()
         ]
 
         return ProviderSnapshot(
@@ -142,11 +149,12 @@ struct GLMQuotaClient: @unchecked Sendable {
                 guard http.statusCode == 200 else {
                     throw ProviderError.commandFailed("GLM/ZAI quota API 返回 HTTP \(http.statusCode)。")
                 }
+                let subscriptionInfo = SubscriptionInfoParser.parse(data: data, source: .automatic)
                 let decoded = try JSONDecoder().decode(GLMQuotaLimitResponse.self, from: data)
                 guard decoded.success else {
                     throw ProviderError.commandFailed(decoded.msg)
                 }
-                return decoded.data.usageStats(platform: platform)
+                return decoded.data.usageStats(platform: platform, subscriptionInfo: subscriptionInfo)
             } catch let error as ProviderError {
                 throw error
             } catch {
@@ -186,6 +194,7 @@ struct GLMUsageStats: Codable, Equatable, Sendable {
     var tokenUsage: GLMQuotaUsage?
     var weeklyUsage: GLMQuotaUsage?
     var mcpUsage: GLMQuotaUsage?
+    var subscriptionInfo: SubscriptionInfo? = nil
 
     var platformLabel: String { platform.rawValue }
 }
@@ -339,12 +348,13 @@ private struct GLMQuotaLimitResponse: Decodable {
 private struct GLMQuotaLimitData: Decodable {
     var limits: [GLMQuotaLimitItem]
 
-    func usageStats(platform: GLMPlatform) -> GLMUsageStats {
+    func usageStats(platform: GLMPlatform, subscriptionInfo: SubscriptionInfo?) -> GLMUsageStats {
         GLMUsageStats(
             platform: platform,
             tokenUsage: findQuota(type: "TOKENS_LIMIT", unit: 3, window: "5h"),
             weeklyUsage: findQuota(type: "TOKENS_LIMIT", unit: 6, window: "weekly"),
-            mcpUsage: findQuota(type: "TIME_LIMIT", unit: nil, window: "30d")
+            mcpUsage: findQuota(type: "TIME_LIMIT", unit: nil, window: "30d"),
+            subscriptionInfo: subscriptionInfo
         )
     }
 

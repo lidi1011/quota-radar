@@ -191,6 +191,49 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(RadarFormatters.resetDateTime(date), "07-05 03:05")
     }
 
+    func testSubscriptionRemainingFormatting() throws {
+        let now = try dateUTC8(year: 2026, month: 7, day: 6, hour: 10, minute: 0)
+        let future = try dateUTC8(year: 2026, month: 7, day: 9, hour: 1, minute: 0)
+        let today = try dateUTC8(year: 2026, month: 7, day: 6, hour: 23, minute: 0)
+        let expired = try dateUTC8(year: 2026, month: 7, day: 4, hour: 23, minute: 0)
+
+        XCTAssertEqual(RadarFormatters.subscriptionRemainingText(future, now: now), "剩余 3 天")
+        XCTAssertEqual(RadarFormatters.subscriptionRemainingText(today, now: now), "今天到期")
+        XCTAssertEqual(RadarFormatters.subscriptionRemainingText(expired, now: now), "已过期 2 天")
+        XCTAssertEqual(RadarFormatters.subscriptionDate(future), "2026-07-09")
+    }
+
+    func testSubscriptionInfoUnavailableCard() {
+        let card = SubscriptionInfo.unavailable.usageCard()
+
+        XCTAssertEqual(card.id, .subscriptionExpiry)
+        XCTAssertEqual(card.primaryValue, "未设置")
+        XCTAssertEqual(card.trailingValue, "")
+        XCTAssertEqual(card.note, "未从接口读取到订阅到期时间")
+    }
+
+    func testMonthlySubscriptionRuleUsesCurrentMonthWhenUpcoming() throws {
+        let now = try dateUTC8(year: 2026, month: 7, day: 6, hour: 10, minute: 0)
+        let next = ManualSubscriptionRule.monthly(day: 15).nextDate(now: now)
+
+        XCTAssertEqual(RadarFormatters.subscriptionDate(next), "2026-07-15")
+        XCTAssertEqual(RadarFormatters.subscriptionRemainingText(next, now: now), "剩余 9 天")
+    }
+
+    func testMonthlySubscriptionRuleUsesNextMonthAfterRenewalDay() throws {
+        let now = try dateUTC8(year: 2026, month: 7, day: 16, hour: 10, minute: 0)
+        let next = ManualSubscriptionRule.monthly(day: 15).nextDate(now: now)
+
+        XCTAssertEqual(RadarFormatters.subscriptionDate(next), "2026-08-15")
+    }
+
+    func testMonthlySubscriptionRuleClampsToMonthEnd() throws {
+        let now = try dateUTC8(year: 2026, month: 2, day: 1, hour: 10, minute: 0)
+        let next = ManualSubscriptionRule.monthly(day: 31).nextDate(now: now)
+
+        XCTAssertEqual(RadarFormatters.subscriptionDate(next), "2026-02-28")
+    }
+
     func testTodayStartUsesLocalTimeZone() throws {
         var input = DateComponents()
         input.calendar = Calendar.current
@@ -256,6 +299,50 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(multiplier, 1.0)
     }
 
+    func testSubscriptionParserAcceptsSnakeCaseAndISODate() throws {
+        let data = """
+        {
+          "subscription": {
+            "expires_at": "2026-08-06T00:00:00Z",
+            "plan_name": "Codex Pro"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let info = try XCTUnwrap(SubscriptionInfoParser.parse(data: data))
+
+        XCTAssertEqual(info.planName, "Codex Pro")
+        XCTAssertEqual(info.source, .automatic)
+        XCTAssertEqual(info.expiresAt?.timeIntervalSince1970, 1_785_974_400)
+    }
+
+    func testSubscriptionParserAcceptsCamelCaseAndMillisecondTimestamp() throws {
+        let object: [String: Any] = [
+            "account": [
+                "currentPeriodEnd": 1_785_974_400_000,
+                "planName": "GLM Coding"
+            ]
+        ]
+
+        let info = try XCTUnwrap(SubscriptionInfoParser.parse(object))
+
+        XCTAssertEqual(info.planName, "GLM Coding")
+        XCTAssertEqual(info.expiresAt?.timeIntervalSince1970, 1_785_974_400)
+    }
+
+    func testSubscriptionParserAcceptsRenewalTimestampSeconds() throws {
+        let object: [String: Any] = [
+            "data": [
+                "renewsAt": 1_785_974_400
+            ]
+        ]
+
+        let info = try XCTUnwrap(SubscriptionInfoParser.parse(object))
+
+        XCTAssertNil(info.expiresAt)
+        XCTAssertEqual(info.renewsAt?.timeIntervalSince1970, 1_785_974_400)
+    }
+
     func testProviderPreferencesDecodesLegacyPayloadAsVisible() throws {
         let data = """
         {
@@ -288,6 +375,34 @@ final class ParserTests: XCTestCase {
         XCTAssertTrue(settings.isVisible(.resetCredits, for: .codex))
     }
 
+    func testPreferencesMigrationAddsSubscriptionExpiryCard() {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        ProviderPreferences(
+            ringPrimaryHex: "#14B8A6",
+            ringSecondaryHex: "#F97316",
+            cardAccentHex: "#10B981",
+            visibleCards: [.tokenUsage]
+        ).save(provider: .glm, defaults: defaults)
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertTrue(settings.isVisible(.subscriptionExpiry, for: .glm))
+    }
+
+    func testLegacyManualSubscriptionDateMigratesToMonthlyRule() throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(try dateUTC8(year: 2027, month: 7, day: 15, hour: 0, minute: 0), forKey: "subscriptionExpiry.glm.manual")
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.glmManualSubscriptionRule, .monthly(day: 15))
+        XCTAssertNil(defaults.object(forKey: "subscriptionExpiry.glm.manual"))
+    }
+
     func testGLMForceRefreshBypassesCachedStats() async throws {
         let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -318,6 +433,66 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(forced.cards.first?.primaryValue, "2%")
         let callCount = await calls.value
         XCTAssertEqual(callCount, 2)
+    }
+
+    func testGLMProviderUsesAutomaticSubscriptionBeforeManualFallback() async throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.glmAuthToken = "test-token"
+        settings.glmManualSubscriptionRule = .monthly(day: 10)
+        let automaticExpiry = try dateUTC8(year: 2026, month: 8, day: 6, hour: 0, minute: 0)
+        let client = GLMQuotaClient { _, _ in
+            GLMUsageStats(
+                platform: .zhipu,
+                tokenUsage: nil,
+                weeklyUsage: nil,
+                mcpUsage: nil,
+                subscriptionInfo: SubscriptionInfo(expiresAt: automaticExpiry, renewsAt: nil, planName: "GLM Pro", source: .automatic)
+            )
+        }
+
+        let snapshot = try await GLMProvider(settings: settings, cache: GLMQuotaCache(), client: client).snapshot(force: true)
+        let card = try XCTUnwrap(snapshot.cards.first { $0.id == .subscriptionExpiry })
+
+        XCTAssertEqual(card.trailingValue, "2026-08-06")
+        XCTAssertEqual(card.note, "自动读取 · GLM Pro")
+    }
+
+    func testGLMProviderUsesManualSubscriptionFallback() async throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.glmAuthToken = "test-token"
+        settings.glmManualSubscriptionRule = .fixedDate(try dateUTC8(year: 2026, month: 7, day: 10, hour: 0, minute: 0))
+        let client = GLMQuotaClient { _, _ in
+            GLMUsageStats(platform: .zhipu, tokenUsage: nil, weeklyUsage: nil, mcpUsage: nil)
+        }
+
+        let snapshot = try await GLMProvider(settings: settings, cache: GLMQuotaCache(), client: client).snapshot(force: true)
+        let card = try XCTUnwrap(snapshot.cards.first { $0.id == .subscriptionExpiry })
+
+        XCTAssertEqual(card.trailingValue, "2026-07-10")
+        XCTAssertEqual(card.note, "手动设置 · 2026-07-10")
+    }
+
+    func testGLMProviderShowsUnsetSubscriptionWithoutAutomaticOrManualDate() async throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.glmAuthToken = "test-token"
+        let client = GLMQuotaClient { _, _ in
+            GLMUsageStats(platform: .zhipu, tokenUsage: nil, weeklyUsage: nil, mcpUsage: nil)
+        }
+
+        let snapshot = try await GLMProvider(settings: settings, cache: GLMQuotaCache(), client: client).snapshot(force: true)
+        let card = try XCTUnwrap(snapshot.cards.first { $0.id == .subscriptionExpiry })
+
+        XCTAssertEqual(card.primaryValue, "未设置")
+        XCTAssertEqual(card.note, "未从接口读取到订阅到期时间")
     }
 
     func testCommandRunnerTerminatesTimedOutProcess() {

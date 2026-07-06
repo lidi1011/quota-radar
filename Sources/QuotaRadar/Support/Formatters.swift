@@ -53,4 +53,25 @@ enum RadarFormatters {
         formatter.dateFormat = "MM-dd HH:mm"
         return formatter.string(from: date)
     }
+
+    static func subscriptionDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func subscriptionRemainingText(_ date: Date, now: Date = Date()) -> String {
+        let calendar = localCalendar
+        let start = calendar.startOfDay(for: now)
+        let end = calendar.startOfDay(for: date)
+        let days = calendar.dateComponents([.day], from: start, to: end).day ?? 0
+        if days > 0 {
+            return "剩余 \(days) 天"
+        }
+        if days == 0 {
+            return "今天到期"
+        }
+        return "已过期 \(abs(days)) 天"
+    }
 }

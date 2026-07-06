@@ -3,9 +3,10 @@ import SwiftUI
 struct UsageCardView: View {
     var card: UsageCard
     var accentHex: String
+    var layout: LayoutPreset
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: cardSpacing) {
             HStack {
                 Label(card.title, systemImage: card.systemImage)
                     .font(.headline)
@@ -38,15 +39,15 @@ struct UsageCardView: View {
                 Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(layout.noteLineLimit)
             } else {
                 Capsule()
                     .fill(Color.white.opacity(0.14))
                     .frame(height: 10)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 188, maxHeight: 188, alignment: .topLeading)
+        .padding(layout.cardPadding)
+        .frame(maxWidth: .infinity, minHeight: layout.cardHeight, maxHeight: layout.cardHeight, alignment: .topLeading)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.42))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
@@ -56,7 +57,15 @@ struct UsageCardView: View {
     }
 
     private var primaryFontSize: CGFloat {
-        card.id == .planProgress ? 30 : 34
+        card.id == .planProgress ? layout.progressValueFontSize : layout.cardValueFontSize
+    }
+
+    private var cardSpacing: CGFloat {
+        switch layout {
+        case .compact: 10
+        case .standard: 14
+        case .spacious: 16
+        }
     }
 }
 

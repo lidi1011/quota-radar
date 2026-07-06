@@ -5,6 +5,7 @@ struct ProviderPanelView: View {
     var snapshot: ProviderSnapshot?
     var state: ProviderLoadState
     var preferences: ProviderPreferences
+    var layout: LayoutPreset
     var refresh: () -> Void
 
     private var visibleCards: [UsageCard] {
@@ -47,25 +48,25 @@ struct ProviderPanelView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: layout.panelSpacing) {
             panelHeader
 
             if gridCards.isEmpty {
                 HStack {
                     Spacer(minLength: 0)
                     ringBlock
-                        .frame(width: 270)
+                        .frame(width: layout.ringColumnWidth)
                     Spacer(minLength: 0)
                 }
             } else {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 26) {
+                    HStack(alignment: .center, spacing: layout.horizontalBlockSpacing) {
                         ringBlock
-                            .frame(width: 270)
+                            .frame(width: layout.ringColumnWidth)
                         dashboardBlock
                     }
 
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: layout.panelSpacing) {
                         ringBlock
                         dashboardBlock
                     }
@@ -73,7 +74,7 @@ struct ProviderPanelView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(20)
+        .padding(layout.panelPadding)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -117,9 +118,10 @@ struct ProviderPanelView: View {
                     .placeholder(id: "secondary", label: "次")
                 ],
                 primaryHex: preferences.ringPrimaryHex,
-                secondaryHex: preferences.ringSecondaryHex
+                secondaryHex: preferences.ringSecondaryHex,
+                layout: layout
             )
-            .frame(width: 220, height: 220)
+            .frame(width: layout.ringSize, height: layout.ringSize)
 
             VStack(spacing: 8) {
                 ForEach(snapshot?.windows ?? []) { window in
@@ -128,13 +130,13 @@ struct ProviderPanelView: View {
                             .fill(window.id == (snapshot?.windows.first?.id ?? "") ? Color(hex: preferences.ringPrimaryHex) : Color(hex: preferences.ringSecondaryHex))
                             .frame(width: 8, height: 8)
                         Text(window.label)
-                            .font(.callout.weight(.bold))
+                            .font(layout.ringLabelFont)
                         Text("重置")
-                            .font(.callout.weight(.semibold))
+                            .font(layout.ringLabelFont)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Text(window.resetText)
-                            .font(.callout.monospacedDigit().weight(.semibold))
+                            .font(layout.ringLabelFont.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -143,9 +145,9 @@ struct ProviderPanelView: View {
     }
 
     private var dashboardBlock: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 16)], spacing: 16) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.cardMinWidth), spacing: layout.cardSpacing)], spacing: layout.cardSpacing) {
                 ForEach(gridCards) { card in
-                    UsageCardView(card: card, accentHex: preferences.cardAccentHex)
+                    UsageCardView(card: card, accentHex: preferences.cardAccentHex, layout: layout)
                 }
         }
     }
