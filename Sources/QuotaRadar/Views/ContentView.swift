@@ -29,8 +29,10 @@ struct ContentView: View {
                 contentHeight = height
             }
             .background(
-                MainWindowHeightFitter(
+                MainWindowSizeFitter(
+                    contentWidth: fittedContentWidth,
                     contentHeight: contentHeight,
+                    shouldFitWidth: fittedContentWidth != nil,
                     shouldFitHeight: visibleProviderCount == 1
                 )
             )
@@ -62,6 +64,25 @@ struct ContentView: View {
 
     private var scrollAxes: Axis.Set {
         settings.providerLayoutMode == .horizontal ? [.vertical, .horizontal] : [.vertical]
+    }
+
+    private var fittedContentWidth: CGFloat? {
+        guard !visibleProviders.isEmpty,
+              visibleProviders.allSatisfy({ settings.preferences(for: $0).visibleCards.isEmpty }) else {
+            return nil
+        }
+
+        let layout = settings.layoutPreset
+        let panelWidths = visibleProviders.map { _ in emptyProviderPanelWidth(layout: layout) }
+        let panelWidth: CGFloat
+        switch settings.providerLayoutMode {
+        case .vertical:
+            panelWidth = panelWidths.max() ?? 0
+        case .horizontal:
+            panelWidth = panelWidths.reduce(0, +)
+                + CGFloat(max(0, panelWidths.count - 1)) * layout.contentSpacing
+        }
+        return panelWidth + layout.contentHorizontalPadding * 2
     }
 
     @ViewBuilder
@@ -97,8 +118,7 @@ struct ContentView: View {
     private func panelWidth(for provider: ProviderID, containerWidth: CGFloat?) -> CGFloat? {
         let layout = settings.layoutPreset
         guard !settings.preferences(for: provider).visibleCards.isEmpty else {
-            let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
-            return max(ringWidth, emptyProviderPanelSquareWidth(layout: layout))
+            return emptyProviderPanelWidth(layout: layout)
         }
 
         guard settings.providerLayoutMode == .horizontal, let containerWidth else {
@@ -114,6 +134,11 @@ struct ContentView: View {
         let halfWindowWidth = max(0, availableWidth / 2)
         let twoCardGridWidth = layout.cardMinWidth * 2 + layout.cardSpacing + layout.panelPadding * 2
         return max(halfWindowWidth, twoCardGridWidth, ringWidth)
+    }
+
+    private func emptyProviderPanelWidth(layout: LayoutPreset) -> CGFloat {
+        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
+        return max(ringWidth, emptyProviderPanelSquareWidth(layout: layout))
     }
 
     private func emptyProviderPanelSquareWidth(layout: LayoutPreset) -> CGFloat {
@@ -149,8 +174,10 @@ private struct ContentHeightPreferenceKey: PreferenceKey {
     }
 }
 
-private struct MainWindowHeightFitter: NSViewRepresentable {
+private struct MainWindowSizeFitter: NSViewRepresentable {
+    var contentWidth: CGFloat?
     var contentHeight: CGFloat
+    var shouldFitWidth: Bool
     var shouldFitHeight: Bool
 
     func makeCoordinator() -> Coordinator {
@@ -162,26 +189,40 @@ private struct MainWindowHeightFitter: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        guard shouldFitHeight, contentHeight > 0 else {
+        guard (shouldFitWidth && contentWidth != nil) || (shouldFitHeight && contentHeight > 0) else {
             return
         }
 
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            let targetHeight = ceil(contentHeight)
-            guard abs(context.coordinator.lastAppliedHeight - targetHeight) > 1 else { return }
-
-            context.coordinator.lastAppliedHeight = targetHeight
-            let width = window.contentLayoutRect.width > 0 ? window.contentLayoutRect.width : window.frame.width
+            let currentContentWidth = window.contentLayoutRect.width
             let currentContentHeight = window.contentLayoutRect.height
+            var targetWidth = currentContentWidth > 0 ? currentContentWidth : window.frame.width
+            var targetHeight = currentContentHeight > 0 ? currentContentHeight : window.frame.height
 
-            if abs(currentContentHeight - targetHeight) > 12 {
-                window.setContentSize(NSSize(width: width, height: targetHeight))
+            if shouldFitWidth, let contentWidth {
+                targetWidth = ceil(contentWidth)
+            }
+            if shouldFitHeight, contentHeight > 0 {
+                targetHeight = ceil(contentHeight)
+            }
+
+            guard abs(context.coordinator.lastAppliedWidth - targetWidth) > 1
+                || abs(context.coordinator.lastAppliedHeight - targetHeight) > 1 else {
+                return
+            }
+
+            context.coordinator.lastAppliedWidth = targetWidth
+            context.coordinator.lastAppliedHeight = targetHeight
+
+            if abs(currentContentWidth - targetWidth) > 12 || abs(currentContentHeight - targetHeight) > 12 {
+                window.setContentSize(NSSize(width: targetWidth, height: targetHeight))
             }
         }
     }
 
     final class Coordinator {
+        var lastAppliedWidth: CGFloat = 0
         var lastAppliedHeight: CGFloat = 0
     }
 }
