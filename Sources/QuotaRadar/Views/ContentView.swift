@@ -14,45 +14,47 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ScrollView(scrollAxes) {
-            providerStack
-            .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
-            .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
+        GeometryReader { windowProxy in
+            ScrollView(scrollAxes) {
+                providerStack(containerWidth: windowProxy.size.width)
+                .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
+                .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
+                    }
+                )
+            }
+            .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
+                contentHeight = height
+            }
             .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
-                }
+                MainWindowHeightFitter(
+                    contentHeight: contentHeight,
+                    shouldFitHeight: visibleProviderCount == 1
+                )
             )
-        }
-        .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
-            contentHeight = height
-        }
-        .background(
-            MainWindowHeightFitter(
-                contentHeight: contentHeight,
-                shouldFitHeight: visibleProviderCount == 1
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(nsColor: .windowBackgroundColor),
+                        Color(hex: "#172033").opacity(0.28),
+                        Color(hex: "#4A1D2E").opacity(0.22)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             )
-        )
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    Color(hex: "#172033").opacity(0.28),
-                    Color(hex: "#4A1D2E").opacity(0.22)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    Task { await store.refreshAll(force: true) }
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
-                }
-                SettingsLink {
-                    Label("设置", systemImage: "gearshape")
+            .toolbar {
+                ToolbarItemGroup {
+                    Button {
+                        Task { await store.refreshAll(force: true) }
+                    } label: {
+                        Label("刷新", systemImage: "arrow.clockwise")
+                    }
+                    SettingsLink {
+                        Label("设置", systemImage: "gearshape")
+                    }
                 }
             }
         }
@@ -63,20 +65,20 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var providerStack: some View {
+    private func providerStack(containerWidth: CGFloat) -> some View {
         switch settings.providerLayoutMode {
         case .vertical:
             VStack(alignment: .leading, spacing: settings.layoutPreset.contentSpacing) {
-                providerPanels
+                providerPanels()
             }
         case .horizontal:
             HStack(alignment: .top, spacing: settings.layoutPreset.contentSpacing) {
-                providerPanels
+                providerPanels(panelWidth: horizontalProviderPanelWidth(containerWidth: containerWidth))
             }
         }
     }
 
-    private var providerPanels: some View {
+    private func providerPanels(panelWidth: CGFloat? = nil) -> some View {
         ForEach(visibleProviders) { provider in
             ProviderPanelView(
                 provider: provider,
@@ -88,7 +90,17 @@ struct ContentView: View {
             ) {
                 Task { await store.refresh(provider) }
             }
+            .frame(width: panelWidth)
         }
+    }
+
+    private func horizontalProviderPanelWidth(containerWidth: CGFloat) -> CGFloat {
+        let layout = settings.layoutPreset
+        let availableWidth = containerWidth - layout.contentHorizontalPadding * 2 - layout.contentSpacing
+        let halfWindowWidth = max(0, availableWidth / 2)
+        let twoCardGridWidth = layout.cardMinWidth * 2 + layout.cardSpacing + layout.panelPadding * 2
+        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
+        return max(halfWindowWidth, twoCardGridWidth, ringWidth)
     }
 
 }
