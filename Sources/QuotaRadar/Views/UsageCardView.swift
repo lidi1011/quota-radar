@@ -34,8 +34,16 @@ struct UsageCardView: View {
             } else if let meter = quotaMeter {
                 QuotaMeterCardBody(meter: meter, note: card.note, lineLimit: layout.noteLineLimit)
             } else if let breakdown = card.breakdown {
-                TokenBreakdownBar(breakdown: breakdown, accentHex: accentHex)
-                TokenLegend(breakdown: breakdown)
+                TokenBreakdownBar(
+                    breakdown: breakdown,
+                    uncachedHex: primaryRingHex,
+                    cachedHex: secondaryRingHex
+                )
+                TokenLegend(
+                    breakdown: breakdown,
+                    uncachedHex: primaryRingHex,
+                    cachedHex: secondaryRingHex
+                )
             } else if let note = card.note {
                 Capsule()
                     .fill(Color.white.opacity(0.14))
@@ -90,7 +98,7 @@ struct UsageCardView: View {
         default:
             fillHex = accentHex
         }
-        return QuotaMeter(value: percent / 100, fillHex: fillHex)
+        return QuotaMeter(value: card.meterValue ?? percent / 100, fillHex: fillHex)
     }
 
     private static func percentValue(from text: String) -> Double? {
@@ -247,17 +255,18 @@ private struct PlanProgressCardBody: View {
 
 private struct TokenBreakdownBar: View {
     var breakdown: TokenBreakdown
-    var accentHex: String
+    var uncachedHex: String
+    var cachedHex: String
 
     var body: some View {
         GeometryReader { geometry in
             let total = max(1, breakdown.total)
             HStack(spacing: 0) {
                 Rectangle()
-                    .fill(Color(hex: accentHex))
+                    .fill(Color(hex: uncachedHex))
                     .frame(width: geometry.size.width * Double(breakdown.uncachedInput) / Double(total))
                 Rectangle()
-                    .fill(Color(hex: "#8B5CF6"))
+                    .fill(Color(hex: cachedHex))
                     .frame(width: geometry.size.width * Double(breakdown.cachedInput) / Double(total))
                 Rectangle()
                     .fill(Color(hex: "#F59E0B"))
@@ -272,11 +281,13 @@ private struct TokenBreakdownBar: View {
 
 private struct TokenLegend: View {
     var breakdown: TokenBreakdown
+    var uncachedHex: String
+    var cachedHex: String
 
     var body: some View {
         VStack(spacing: 6) {
-            legendRow(color: "#1E88FF", label: "未缓存", value: breakdown.uncachedInput)
-            legendRow(color: "#8B5CF6", label: "缓存", value: breakdown.cachedInput)
+            legendRow(color: uncachedHex, label: "未缓存", value: breakdown.uncachedInput)
+            legendRow(color: cachedHex, label: "缓存", value: breakdown.cachedInput)
             legendRow(color: "#F59E0B", label: "输出", value: breakdown.output)
         }
     }

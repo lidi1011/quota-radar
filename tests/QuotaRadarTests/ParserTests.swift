@@ -415,6 +415,18 @@ final class ParserTests: XCTestCase {
         XCTAssertTrue(AppSettings(defaults: defaults).codexRemoteSubscriptionLookupEnabled)
     }
 
+    func testProviderLayoutModeDefaultsVerticalAndPersists() {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.providerLayoutMode, .vertical)
+        settings.providerLayoutMode = .horizontal
+        XCTAssertEqual(AppSettings(defaults: defaults).providerLayoutMode, .horizontal)
+    }
+
     func testCodexSubscriptionReaderSkipsBackendWhenRemoteLookupDisabled() async {
         let calls = AsyncCounter()
         let reader = CodexSubscriptionReader(
@@ -574,6 +586,29 @@ final class ParserTests: XCTestCase {
 
         XCTAssertEqual(card.primaryValue, "未设置")
         XCTAssertEqual(card.note, "未从接口读取到订阅到期时间")
+    }
+
+    func testGLMProviderUsesSeparateMCPMeterValue() async throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.glmAuthToken = "test-token"
+        let client = GLMQuotaClient { _, _ in
+            GLMUsageStats(
+                platform: .zhipu,
+                tokenUsage: nil,
+                weeklyUsage: nil,
+                mcpUsage: GLMQuotaUsage(used: 129, limit: 1000, percentage: 12, timeWindow: "30d", resetAt: nil)
+            )
+        }
+
+        let snapshot = try await GLMProvider(settings: settings, cache: GLMQuotaCache(), client: client).snapshot(force: true)
+        let card = try XCTUnwrap(snapshot.cards.first { $0.id == .mcpUsage })
+
+        XCTAssertEqual(card.primaryValue, "12%")
+        XCTAssertEqual(card.note, "129/1000")
+        XCTAssertEqual(card.meterValue ?? 0, 0.785, accuracy: 0.001)
     }
 
     func testCommandRunnerTerminatesTimedOutProcess() {

@@ -36,13 +36,25 @@ struct ProviderPanelView: View {
         return snapshot?.cards.first { $0.id == .resetCredits }
     }
 
+    private var subscriptionExpiryCard: UsageCard? {
+        guard preferences.visibleCards.contains(.subscriptionExpiry) else {
+            return nil
+        }
+        return snapshot?.cards.first { $0.id == .subscriptionExpiry }
+    }
+
     private var gridCards: [UsageCard] {
-        var cards = visibleCards.filter { $0.id != .planProgress && $0.id != .resetCredits }
+        var cards = visibleCards.filter { card in
+            ![.planProgress, .resetCredits, .subscriptionExpiry].contains(card.id)
+        }
         if let progressCard {
             cards.append(progressCard)
         }
         if let resetCreditsCard {
             cards.append(resetCreditsCard)
+        }
+        if let subscriptionExpiryCard {
+            cards.append(subscriptionExpiryCard)
         }
         return cards
     }

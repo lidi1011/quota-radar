@@ -6,26 +6,16 @@ struct ContentView: View {
     @State private var contentHeight: CGFloat = 0
 
     private var visibleProviderCount: Int {
-        ProviderID.allCases.filter { settings.isProviderVisible($0) }.count
+        visibleProviders.count
+    }
+
+    private var visibleProviders: [ProviderID] {
+        ProviderID.allCases.filter { settings.isProviderVisible($0) }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: settings.layoutPreset.contentSpacing) {
-                ForEach(ProviderID.allCases) { provider in
-                    if settings.isProviderVisible(provider) {
-                        ProviderPanelView(
-                            provider: provider,
-                            snapshot: store.snapshots[provider],
-                            state: store.states[provider] ?? .idle,
-                            preferences: settings.preferences(for: provider),
-                            layout: settings.layoutPreset
-                        ) {
-                            Task { await store.refresh(provider) }
-                        }
-                    }
-                }
-            }
+        ScrollView(scrollAxes) {
+            providerStack
             .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
             .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
             .background(
@@ -64,6 +54,38 @@ struct ContentView: View {
                 SettingsLink {
                     Label("设置", systemImage: "gearshape")
                 }
+            }
+        }
+    }
+
+    private var scrollAxes: Axis.Set {
+        settings.providerLayoutMode == .horizontal ? [.vertical, .horizontal] : [.vertical]
+    }
+
+    @ViewBuilder
+    private var providerStack: some View {
+        switch settings.providerLayoutMode {
+        case .vertical:
+            VStack(alignment: .leading, spacing: settings.layoutPreset.contentSpacing) {
+                providerPanels
+            }
+        case .horizontal:
+            HStack(alignment: .top, spacing: settings.layoutPreset.contentSpacing) {
+                providerPanels
+            }
+        }
+    }
+
+    private var providerPanels: some View {
+        ForEach(visibleProviders) { provider in
+            ProviderPanelView(
+                provider: provider,
+                snapshot: store.snapshots[provider],
+                state: store.states[provider] ?? .idle,
+                preferences: settings.preferences(for: provider),
+                layout: settings.layoutPreset
+            ) {
+                Task { await store.refresh(provider) }
             }
         }
     }

@@ -69,7 +69,7 @@ Use the typography tokens as the source of truth for visible hierarchy. Large nu
 
 ## Layout
 
-Use stable spacing tokens and responsive constraints. Provider panels stack vertically in the normal macOS window. Within each panel, the quota ring and cards sit side by side on wide windows and reflow vertically on narrow windows.
+Use stable spacing tokens and responsive constraints. Provider panels default to vertical stacking in the normal macOS window, with an optional horizontal provider layout for wide review sessions. Within each panel, the quota ring and cards sit side by side on wide windows and reflow vertically on narrow windows.
 
 ## Elevation & Depth
 

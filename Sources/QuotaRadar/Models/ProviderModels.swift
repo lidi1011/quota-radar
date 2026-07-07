@@ -82,6 +82,7 @@ struct UsageCard: Identifiable, Codable, Equatable, Sendable {
     var trailingValue: String
     var breakdown: TokenBreakdown?
     var note: String?
+    var meterValue: Double? = nil
     var progress: PlanProgress? = nil
 }
 

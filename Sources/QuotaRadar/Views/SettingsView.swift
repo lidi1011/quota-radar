@@ -18,6 +18,19 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 220)
                     }
+
+                    Divider()
+
+                    SettingsRow(title: "Provider 排列", detail: "控制 Codex 和 GLM 的主界面排布") {
+                        Picker("Provider 排列", selection: $settings.providerLayoutMode) {
+                            ForEach(ProviderLayoutMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
+                    }
                 }
 
                 SettingsCard("Provider 展示") {
@@ -140,11 +153,19 @@ private struct ProviderSettingsPage<Extra: View>: View {
             }
 
             SettingsCard("显示卡片") {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
-                    ForEach(cards) { card in
-                        Toggle(card.title, isOn: visibleBinding(card))
-                            .toggleStyle(.checkbox)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("全选/全不选", isOn: allCardsVisibleBinding)
+                        .toggleStyle(.checkbox)
+                        .font(.callout.weight(.semibold))
+
+                    Divider()
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
+                        ForEach(cards) { card in
+                            Toggle(card.title, isOn: visibleBinding(card))
+                                .toggleStyle(.checkbox)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
@@ -167,6 +188,20 @@ private struct ProviderSettingsPage<Extra: View>: View {
             settings.isVisible(card, for: provider)
         } set: { visible in
             settings.setVisible(visible, card: card, provider: provider)
+        }
+    }
+
+    private var allCardsVisibleBinding: Binding<Bool> {
+        Binding {
+            Set(cards).isSubset(of: settings.preferences(for: provider).visibleCards)
+        } set: { visible in
+            var preferences = settings.preferences(for: provider)
+            if visible {
+                preferences.visibleCards.formUnion(cards)
+            } else {
+                preferences.visibleCards.subtract(cards)
+            }
+            settings.updatePreferences(preferences, for: provider)
         }
     }
 

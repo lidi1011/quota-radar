@@ -159,3 +159,17 @@ enum LayoutPreset: String, CaseIterable, Codable, Identifiable, Hashable {
         }
     }
 }
+
+enum ProviderLayoutMode: String, CaseIterable, Codable, Identifiable, Hashable {
+    case vertical
+    case horizontal
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .vertical: "上下"
+        case .horizontal: "左右"
+        }
+    }
+}
