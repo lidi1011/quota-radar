@@ -257,7 +257,7 @@ struct CodexAppServerSubscriptionReader: Sendable {
                 "clientInfo": [
                     "name": "quota-radar",
                     "title": "Quota Radar",
-                    "version": "1.0.2"
+                    "version": "1.0.3"
                 ],
                 "capabilities": [
                     "experimentalApi": true,

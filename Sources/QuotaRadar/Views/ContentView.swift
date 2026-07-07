@@ -175,6 +175,8 @@ private struct ContentHeightPreferenceKey: PreferenceKey {
 }
 
 private struct MainWindowSizeFitter: NSViewRepresentable {
+    private static let minimumContentSize = NSSize(width: 320, height: 360)
+
     var contentWidth: CGFloat?
     var contentHeight: CGFloat
     var shouldFitWidth: Bool
@@ -201,10 +203,10 @@ private struct MainWindowSizeFitter: NSViewRepresentable {
             var targetHeight = currentContentHeight > 0 ? currentContentHeight : window.frame.height
 
             if shouldFitWidth, let contentWidth {
-                targetWidth = ceil(contentWidth)
+                targetWidth = max(Self.minimumContentSize.width, ceil(contentWidth))
             }
             if shouldFitHeight, contentHeight > 0 {
-                targetHeight = ceil(contentHeight)
+                targetHeight = max(Self.minimumContentSize.height, ceil(contentHeight))
             }
 
             guard abs(context.coordinator.lastAppliedWidth - targetWidth) > 1
@@ -216,7 +218,27 @@ private struct MainWindowSizeFitter: NSViewRepresentable {
             context.coordinator.lastAppliedHeight = targetHeight
 
             if abs(currentContentWidth - targetWidth) > 12 || abs(currentContentHeight - targetHeight) > 12 {
-                window.setContentSize(NSSize(width: targetWidth, height: targetHeight))
+                let targetContentSize = NSSize(width: targetWidth, height: targetHeight)
+                let contentMinimumSize = NSSize(
+                    width: min(Self.minimumContentSize.width, targetWidth),
+                    height: min(Self.minimumContentSize.height, targetHeight)
+                )
+                window.contentMinSize = contentMinimumSize
+                window.minSize = window.frameRect(
+                    forContentRect: NSRect(origin: .zero, size: contentMinimumSize)
+                ).size
+
+                let targetFrameSize = window.frameRect(
+                    forContentRect: NSRect(origin: .zero, size: targetContentSize)
+                ).size
+                let currentFrame = window.frame
+                let targetFrame = NSRect(
+                    x: currentFrame.minX,
+                    y: currentFrame.maxY - targetFrameSize.height,
+                    width: targetFrameSize.width,
+                    height: targetFrameSize.height
+                )
+                window.setFrame(targetFrame, display: true, animate: false)
             }
         }
     }
