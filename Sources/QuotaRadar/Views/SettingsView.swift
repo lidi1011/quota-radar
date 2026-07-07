@@ -50,6 +50,21 @@ struct SettingsView: View {
             .tabItem { Label("通用", systemImage: "gearshape") }
 
             ProviderSettingsPage(provider: .codex) {
+                SettingsCard("Codex 订阅读取") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $settings.codexRemoteSubscriptionLookupEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("允许远程读取订阅到期")
+                                    .font(.callout.weight(.semibold))
+                                Text("默认关闭。开启后会使用 Codex access token 请求 chatgpt.com backend；关闭时只使用本机 app-server 和手动兜底。")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                    }
+                }
+
                 SubscriptionExpirySettingCard(
                     providerName: ProviderID.codex.displayName,
                     rule: $settings.codexManualSubscriptionRule

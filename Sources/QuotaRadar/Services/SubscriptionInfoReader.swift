@@ -122,15 +122,50 @@ enum SubscriptionInfoParser {
 struct CodexSubscriptionReader: @unchecked Sendable {
     private let codexRoot: URL
     private let session: URLSession
+    private let allowRemoteBackendLookup: Bool
+    private let cache: SubscriptionInfoCache?
+    private let cacheTTLSeconds: TimeInterval
+    private let appServerReader: @Sendable () -> SubscriptionInfo?
+    private let backendFetcher: (@Sendable () async throws -> SubscriptionInfo?)?
 
-    init(codexRoot: URL, session: URLSession = .shared) {
+    init(
+        codexRoot: URL,
+        session: URLSession = .shared,
+        allowRemoteBackendLookup: Bool = false,
+        cache: SubscriptionInfoCache? = nil,
+        cacheTTLSeconds: TimeInterval = 3_600,
+        appServerReader: @escaping @Sendable () -> SubscriptionInfo? = { CodexAppServerSubscriptionReader().latestInfo() },
+        backendFetcher: (@Sendable () async throws -> SubscriptionInfo?)? = nil
+    ) {
         self.codexRoot = codexRoot
         self.session = session
+        self.allowRemoteBackendLookup = allowRemoteBackendLookup
+        self.cache = cache
+        self.cacheTTLSeconds = cacheTTLSeconds
+        self.appServerReader = appServerReader
+        self.backendFetcher = backendFetcher
     }
 
-    func subscriptionInfo() async -> SubscriptionInfo? {
-        if let info = CodexAppServerSubscriptionReader().latestInfo() {
+    func subscriptionInfo(force: Bool = false) async -> SubscriptionInfo? {
+        if !force, let cached = await cache?.current(ttlSeconds: cacheTTLSeconds) {
+            return cached.info
+        }
+
+        let info = await fetchLiveSubscriptionInfo()
+        await cache?.update(info)
+        return info
+    }
+
+    private func fetchLiveSubscriptionInfo() async -> SubscriptionInfo? {
+        if let info = appServerReader() {
             return info
+        }
+
+        guard allowRemoteBackendLookup else {
+            return nil
+        }
+        if let backendFetcher {
+            return try? await backendFetcher()
         }
         return try? await fetchBackendSubscriptionInfo()
     }
@@ -171,6 +206,26 @@ struct CodexSubscriptionReader: @unchecked Sendable {
             throw ProviderError.missingCredentials("未找到 Codex access_token")
         }
         return accessToken
+    }
+}
+
+struct SubscriptionInfoCacheEntry: Sendable {
+    var info: SubscriptionInfo?
+    var storedAt: Date
+}
+
+actor SubscriptionInfoCache {
+    private var cached: SubscriptionInfoCacheEntry?
+
+    func current(ttlSeconds: TimeInterval, now: Date = Date()) -> SubscriptionInfoCacheEntry? {
+        guard let cached, now.timeIntervalSince(cached.storedAt) < ttlSeconds else {
+            return nil
+        }
+        return cached
+    }
+
+    func update(_ info: SubscriptionInfo?, now: Date = Date()) {
+        cached = SubscriptionInfoCacheEntry(info: info, storedAt: now)
     }
 }
 

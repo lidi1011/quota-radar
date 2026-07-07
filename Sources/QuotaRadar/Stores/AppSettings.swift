@@ -25,6 +25,10 @@ final class AppSettings: ObservableObject {
         didSet { saveOptionalRule(codexManualSubscriptionRule, key: Keys.codexManualSubscriptionRule) }
     }
 
+    @Published var codexRemoteSubscriptionLookupEnabled: Bool {
+        didSet { defaults.set(codexRemoteSubscriptionLookupEnabled, forKey: Keys.codexRemoteSubscriptionLookupEnabled) }
+    }
+
     @Published var glmManualSubscriptionRule: ManualSubscriptionRule? {
         didSet { saveOptionalRule(glmManualSubscriptionRule, key: Keys.glmManualSubscriptionRule) }
     }
@@ -38,6 +42,7 @@ final class AppSettings: ObservableObject {
         layoutPreset = defaults.string(forKey: Keys.layoutPreset).flatMap(LayoutPreset.init(rawValue:)) ?? .standard
         glmAuthToken = defaults.string(forKey: Keys.glmAuthToken) ?? ""
         glmBaseURL = defaults.string(forKey: Keys.glmBaseURL) ?? "https://open.bigmodel.cn/api/anthropic"
+        codexRemoteSubscriptionLookupEnabled = defaults.bool(forKey: Keys.codexRemoteSubscriptionLookupEnabled)
         codexManualSubscriptionRule = Self.loadManualSubscriptionRule(
             provider: .codex,
             ruleKey: Keys.codexManualSubscriptionRule,
@@ -210,6 +215,7 @@ private enum Keys {
     static let glmAuthToken = "glmAuthToken"
     static let glmBaseURL = "glmBaseURL"
     static let codexManualSubscriptionRule = "subscriptionExpiry.codex.manualRule"
+    static let codexRemoteSubscriptionLookupEnabled = "subscriptionExpiry.codex.remoteLookupEnabled"
     static let glmManualSubscriptionRule = "subscriptionExpiry.glm.manualRule"
     static let codexManualSubscriptionExpiry = "subscriptionExpiry.codex.manual"
     static let glmManualSubscriptionExpiry = "subscriptionExpiry.glm.manual"

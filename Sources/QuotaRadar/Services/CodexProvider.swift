@@ -4,10 +4,19 @@ struct CodexProvider: UsageProvider, Sendable {
     let id: ProviderID = .codex
     private let home: URL
     private let manualSubscriptionRule: ManualSubscriptionRule?
+    private let allowRemoteSubscriptionLookup: Bool
+    private let subscriptionCache: SubscriptionInfoCache
 
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, manualSubscriptionRule: ManualSubscriptionRule? = nil) {
+    init(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        manualSubscriptionRule: ManualSubscriptionRule? = nil,
+        allowRemoteSubscriptionLookup: Bool = false,
+        subscriptionCache: SubscriptionInfoCache = SubscriptionInfoCache()
+    ) {
         self.home = home
         self.manualSubscriptionRule = manualSubscriptionRule
+        self.allowRemoteSubscriptionLookup = allowRemoteSubscriptionLookup
+        self.subscriptionCache = subscriptionCache
     }
 
     func snapshot(force: Bool) async throws -> ProviderSnapshot {
@@ -26,7 +35,11 @@ struct CodexProvider: UsageProvider, Sendable {
         let rateLimitResult = readRateLimitWindows(codexRoot: codexRoot)
         let rateWindows = rateLimitResult.windows
         let resetCreditsCard = await CodexResetCreditsClient(codexRoot: codexRoot).usageCard()
-        let subscriptionInfo = await CodexSubscriptionReader(codexRoot: codexRoot).subscriptionInfo()
+        let subscriptionInfo = await CodexSubscriptionReader(
+            codexRoot: codexRoot,
+            allowRemoteBackendLookup: allowRemoteSubscriptionLookup,
+            cache: subscriptionCache
+        ).subscriptionInfo(force: force)
         let subscription = SubscriptionInfoResolver.resolve(
             automatic: subscriptionInfo,
             manualRule: manualSubscriptionRule

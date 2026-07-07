@@ -10,6 +10,7 @@ final class UsageStore: ObservableObject {
 
     private let settings: AppSettings
     private let glmCache = GLMQuotaCache()
+    private let codexSubscriptionCache = SubscriptionInfoCache()
     private var timer: Timer?
 
     init(settings: AppSettings) {
@@ -75,7 +76,11 @@ final class UsageStore: ObservableObject {
     private func makeProvider(_ provider: ProviderID) -> UsageProvider {
         switch provider {
         case .codex:
-            CodexProvider(manualSubscriptionRule: settings.codexManualSubscriptionRule)
+            CodexProvider(
+                manualSubscriptionRule: settings.codexManualSubscriptionRule,
+                allowRemoteSubscriptionLookup: settings.codexRemoteSubscriptionLookupEnabled,
+                subscriptionCache: codexSubscriptionCache
+            )
         case .glm:
             GLMProvider(settings: settings, cache: glmCache)
         }

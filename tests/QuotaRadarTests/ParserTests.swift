@@ -403,6 +403,87 @@ final class ParserTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "subscriptionExpiry.glm.manual"))
     }
 
+    func testCodexRemoteSubscriptionLookupDefaultsDisabled() {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertFalse(settings.codexRemoteSubscriptionLookupEnabled)
+        settings.codexRemoteSubscriptionLookupEnabled = true
+        XCTAssertTrue(AppSettings(defaults: defaults).codexRemoteSubscriptionLookupEnabled)
+    }
+
+    func testCodexSubscriptionReaderSkipsBackendWhenRemoteLookupDisabled() async {
+        let calls = AsyncCounter()
+        let reader = CodexSubscriptionReader(
+            codexRoot: URL(fileURLWithPath: NSTemporaryDirectory()),
+            allowRemoteBackendLookup: false,
+            appServerReader: { nil },
+            backendFetcher: {
+                await calls.increment()
+                return SubscriptionInfo(expiresAt: Date(), renewsAt: nil, planName: "Remote", source: .automatic)
+            }
+        )
+
+        let info = await reader.subscriptionInfo(force: true)
+
+        XCTAssertNil(info)
+        let callCount = await calls.value
+        XCTAssertEqual(callCount, 0)
+    }
+
+    func testCodexSubscriptionReaderCachesBackendResult() async throws {
+        let expiry = try dateUTC8(year: 2026, month: 8, day: 6, hour: 0, minute: 0)
+        let automatic = SubscriptionInfo(expiresAt: expiry, renewsAt: nil, planName: "Codex Pro", source: .automatic)
+        let calls = AsyncCounter()
+        let reader = CodexSubscriptionReader(
+            codexRoot: URL(fileURLWithPath: NSTemporaryDirectory()),
+            allowRemoteBackendLookup: true,
+            cache: SubscriptionInfoCache(),
+            cacheTTLSeconds: 3_600,
+            appServerReader: { nil },
+            backendFetcher: {
+                await calls.increment()
+                return automatic
+            }
+        )
+
+        let first = await reader.subscriptionInfo()
+        let second = await reader.subscriptionInfo()
+        let forced = await reader.subscriptionInfo(force: true)
+
+        XCTAssertEqual(first, automatic)
+        XCTAssertEqual(second, automatic)
+        XCTAssertEqual(forced, automatic)
+        let callCount = await calls.value
+        XCTAssertEqual(callCount, 2)
+    }
+
+    func testCodexSubscriptionReaderCachesMissingBackendResult() async {
+        let calls = AsyncCounter()
+        let reader = CodexSubscriptionReader(
+            codexRoot: URL(fileURLWithPath: NSTemporaryDirectory()),
+            allowRemoteBackendLookup: true,
+            cache: SubscriptionInfoCache(),
+            cacheTTLSeconds: 3_600,
+            appServerReader: { nil },
+            backendFetcher: {
+                await calls.increment()
+                return nil
+            }
+        )
+
+        let first = await reader.subscriptionInfo()
+        let second = await reader.subscriptionInfo()
+
+        XCTAssertNil(first)
+        XCTAssertNil(second)
+        let callCount = await calls.value
+        XCTAssertEqual(callCount, 1)
+    }
+
     func testGLMForceRefreshBypassesCachedStats() async throws {
         let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
