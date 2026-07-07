@@ -6,6 +6,7 @@ struct ProviderPanelView: View {
     var state: ProviderLoadState
     var preferences: ProviderPreferences
     var layout: LayoutPreset
+    var providerLayoutMode: ProviderLayoutMode = .vertical
     var refresh: () -> Void
 
     private var visibleCards: [UsageCard] {
@@ -64,12 +65,9 @@ struct ProviderPanelView: View {
             panelHeader
 
             if gridCards.isEmpty {
-                HStack {
-                    Spacer(minLength: 0)
-                    ringBlock
-                        .frame(width: layout.ringColumnWidth)
-                    Spacer(minLength: 0)
-                }
+                centeredRingBlock
+            } else if providerLayoutMode == .horizontal {
+                verticalPanelContent
             } else {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .center, spacing: layout.horizontalBlockSpacing) {
@@ -79,7 +77,7 @@ struct ProviderPanelView: View {
                     }
 
                     VStack(alignment: .leading, spacing: layout.panelSpacing) {
-                        ringBlock
+                        centeredRingBlock
                         dashboardBlock
                     }
                 }
@@ -93,6 +91,22 @@ struct ProviderPanelView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.white.opacity(0.13), lineWidth: 1)
         )
+    }
+
+    private var verticalPanelContent: some View {
+        VStack(alignment: .leading, spacing: layout.panelSpacing) {
+            centeredRingBlock
+            dashboardBlock
+        }
+    }
+
+    private var centeredRingBlock: some View {
+        HStack {
+            Spacer(minLength: 0)
+            ringBlock
+                .frame(width: layout.ringColumnWidth)
+            Spacer(minLength: 0)
+        }
     }
 
     private var panelHeader: some View {

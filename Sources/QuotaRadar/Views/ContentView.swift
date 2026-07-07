@@ -83,7 +83,8 @@ struct ContentView: View {
                 snapshot: store.snapshots[provider],
                 state: store.states[provider] ?? .idle,
                 preferences: settings.preferences(for: provider),
-                layout: settings.layoutPreset
+                layout: settings.layoutPreset,
+                providerLayoutMode: settings.providerLayoutMode
             ) {
                 Task { await store.refresh(provider) }
             }
