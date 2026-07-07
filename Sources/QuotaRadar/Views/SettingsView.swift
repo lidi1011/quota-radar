@@ -7,6 +7,19 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             SettingsPage(title: "通用", subtitle: "刷新节奏和手动同步") {
+                SettingsCard("布局") {
+                    SettingsRow(title: "布局尺寸", detail: "控制主窗口卡片、圆环和间距") {
+                        Picker("布局尺寸", selection: $settings.layoutPreset) {
+                            ForEach(LayoutPreset.allCases) { preset in
+                                Text(preset.title).tag(preset)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                }
+
                 SettingsCard("Provider 展示") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
                         ForEach(ProviderID.allCases) { provider in
@@ -36,10 +49,35 @@ struct SettingsView: View {
             }
             .tabItem { Label("通用", systemImage: "gearshape") }
 
-            ProviderSettingsPage(provider: .codex)
+            ProviderSettingsPage(provider: .codex) {
+                SettingsCard("Codex 订阅读取") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $settings.codexRemoteSubscriptionLookupEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("允许远程读取订阅到期")
+                                    .font(.callout.weight(.semibold))
+                                Text("默认关闭。开启后会使用 Codex access token 请求 chatgpt.com backend；关闭时只使用本机 app-server 和手动兜底。")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                    }
+                }
+
+                SubscriptionExpirySettingCard(
+                    providerName: ProviderID.codex.displayName,
+                    rule: $settings.codexManualSubscriptionRule
+                )
+            }
                 .tabItem { Label("Codex", systemImage: "terminal") }
 
             ProviderSettingsPage(provider: .glm) {
+                SubscriptionExpirySettingCard(
+                    providerName: ProviderID.glm.displayName,
+                    rule: $settings.glmManualSubscriptionRule
+                )
+
                 SettingsCard("GLM / ZAI API") {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("用于直接读取 `/monitor/usage/quota/limit`。默认也会读取同名环境变量。")
@@ -118,9 +156,9 @@ private struct ProviderSettingsPage<Extra: View>: View {
     private var cards: [UsageCardID] {
         switch provider {
         case .codex:
-            [.today, .sevenDays, .total, .planProgress, .resetCredits]
+            [.today, .sevenDays, .total, .planProgress, .resetCredits, .subscriptionExpiry]
         case .glm:
-            [.tokenUsage, .weeklyQuota, .mcpUsage, .multiplier]
+            [.tokenUsage, .weeklyQuota, .mcpUsage, .multiplier, .subscriptionExpiry]
         }
     }
 
@@ -139,6 +177,69 @@ private struct ProviderSettingsPage<Extra: View>: View {
             var preferences = settings.preferences(for: provider)
             preferences[keyPath: keyPath] = color.toHex()
             settings.updatePreferences(preferences, for: provider)
+        }
+    }
+}
+
+private struct SubscriptionExpirySettingCard: View {
+    var providerName: String
+    @Binding var rule: ManualSubscriptionRule?
+
+    var body: some View {
+        SettingsCard("订阅到期兜底") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("自动读取不到 \(providerName) 订阅到期时间时，卡片会按这里的每月续费日计算。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if rule == nil {
+                    Button {
+                        rule = .monthly(day: 15)
+                    } label: {
+                        Label("设置每月续费日", systemImage: "calendar.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    SettingsRow(title: "续费日", detail: "每月 \(currentDay) 日") {
+                        Picker("续费日", selection: dayBinding) {
+                            ForEach(1...31, id: \.self) { day in
+                                Text("每月 \(day) 日").tag(day)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 128)
+                    }
+
+                    Button(role: .destructive) {
+                        rule = nil
+                    } label: {
+                        Label("清空续费规则", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var currentDay: Int {
+        switch rule {
+        case .monthly(let day):
+            return min(31, max(1, day))
+        case .fixedDate(let date):
+            return RadarFormatters.localCalendar.component(.day, from: date)
+        case .none:
+            return 15
+        }
+    }
+
+    private var dayBinding: Binding<Int> {
+        Binding {
+            currentDay
+        } set: { newValue in
+            rule = .monthly(day: newValue)
         }
     }
 }

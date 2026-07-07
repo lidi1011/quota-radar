@@ -11,22 +11,23 @@ struct ContentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: settings.layoutPreset.contentSpacing) {
                 ForEach(ProviderID.allCases) { provider in
                     if settings.isProviderVisible(provider) {
                         ProviderPanelView(
                             provider: provider,
                             snapshot: store.snapshots[provider],
                             state: store.states[provider] ?? .idle,
-                            preferences: settings.preferences(for: provider)
+                            preferences: settings.preferences(for: provider),
+                            layout: settings.layoutPreset
                         ) {
                             Task { await store.refresh(provider) }
                         }
                     }
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
+            .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
@@ -112,11 +113,4 @@ private struct MainWindowHeightFitter: NSViewRepresentable {
     final class Coordinator {
         var lastAppliedHeight: CGFloat = 0
     }
-}
-
-#Preview {
-    ContentView()
-        .environmentObject(AppSettings())
-        .environmentObject(UsageStore(settings: AppSettings()))
-        .frame(width: 1180, height: 860)
 }

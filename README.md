@@ -56,12 +56,13 @@ NOTARY_PROFILE="<notary-profile>" \
 
 生成物位于 `dist/QuotaRadar-<version>-signed.dmg`。
 
-## 数据来源
+## 数据来源与网络边界
 
-- Codex：优先读取本机 `~/.codex` token/session 数据，并尝试调用本机 Codex app-server 的额度接口。
+- Codex：默认读取本机 `~/.codex` token/session 数据，并尝试调用本机 Codex app-server 的额度接口。
+- Codex 订阅到期：默认只使用本机 Codex app-server 和设置页手动规则。设置页可显式开启远程读取；开启后会使用本机 Codex access token 请求 `chatgpt.com` backend 来尝试读取订阅到期日。
 - GLM / ZAI：内置参考 `glm-plan-usage` 的读取方式，使用 `ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_BASE_URL` 调用 quota API；设置页可手动补充。
 
-所有数据都在本机读取；首版不会上传 usage、token、线程或凭据。
+应用不会上传本机 usage、线程或会话日志。涉及远程 API 的读取只发送对应服务要求的认证 header。
 
 ## 致谢
 
