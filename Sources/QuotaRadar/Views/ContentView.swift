@@ -95,19 +95,21 @@ struct ContentView: View {
     }
 
     private func panelWidth(for provider: ProviderID, containerWidth: CGFloat?) -> CGFloat? {
-        guard settings.providerLayoutMode == .horizontal, let containerWidth else {
-            return nil
-        }
-        return horizontalProviderPanelWidth(provider: provider, containerWidth: containerWidth)
-    }
-
-    private func horizontalProviderPanelWidth(provider: ProviderID, containerWidth: CGFloat) -> CGFloat {
         let layout = settings.layoutPreset
-        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
         guard !settings.preferences(for: provider).visibleCards.isEmpty else {
+            let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
             return max(ringWidth, emptyProviderPanelSquareWidth(layout: layout))
         }
 
+        guard settings.providerLayoutMode == .horizontal, let containerWidth else {
+            return nil
+        }
+        return horizontalProviderPanelWidth(containerWidth: containerWidth)
+    }
+
+    private func horizontalProviderPanelWidth(containerWidth: CGFloat) -> CGFloat {
+        let layout = settings.layoutPreset
+        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
         let availableWidth = containerWidth - layout.contentHorizontalPadding * 2 - layout.contentSpacing
         let halfWindowWidth = max(0, availableWidth / 2)
         let twoCardGridWidth = layout.cardMinWidth * 2 + layout.cardSpacing + layout.panelPadding * 2
