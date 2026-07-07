@@ -105,13 +105,36 @@ struct ContentView: View {
         let layout = settings.layoutPreset
         let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
         guard !settings.preferences(for: provider).visibleCards.isEmpty else {
-            return ringWidth
+            return max(ringWidth, emptyProviderPanelSquareWidth(layout: layout))
         }
 
         let availableWidth = containerWidth - layout.contentHorizontalPadding * 2 - layout.contentSpacing
         let halfWindowWidth = max(0, availableWidth / 2)
         let twoCardGridWidth = layout.cardMinWidth * 2 + layout.cardSpacing + layout.panelPadding * 2
         return max(halfWindowWidth, twoCardGridWidth, ringWidth)
+    }
+
+    private func emptyProviderPanelSquareWidth(layout: LayoutPreset) -> CGFloat {
+        let headerHeight: CGFloat
+        let legendHeight: CGFloat
+        switch layout {
+        case .compact:
+            headerHeight = 42
+            legendHeight = 42
+        case .standard:
+            headerHeight = 50
+            legendHeight = 50
+        case .spacious:
+            headerHeight = 58
+            legendHeight = 58
+        }
+
+        return layout.panelPadding * 2
+            + headerHeight
+            + layout.panelSpacing
+            + layout.ringSize
+            + 12
+            + legendHeight
     }
 
 }
