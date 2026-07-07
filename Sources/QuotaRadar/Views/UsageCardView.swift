@@ -3,6 +3,8 @@ import SwiftUI
 struct UsageCardView: View {
     var card: UsageCard
     var accentHex: String
+    var primaryRingHex: String
+    var secondaryRingHex: String
     var layout: LayoutPreset
 
     var body: some View {
@@ -29,6 +31,8 @@ struct UsageCardView: View {
                 PlanProgressCardBody(progress: card.progress, note: card.note, accentHex: accentHex)
             } else if card.id == .resetCredits {
                 ResetCreditsCardBody(note: card.note)
+            } else if let meter = quotaMeter {
+                QuotaMeterCardBody(meter: meter, note: card.note, lineLimit: layout.noteLineLimit)
             } else if let breakdown = card.breakdown {
                 TokenBreakdownBar(breakdown: breakdown, accentHex: accentHex)
                 TokenLegend(breakdown: breakdown)
@@ -65,6 +69,73 @@ struct UsageCardView: View {
         case .compact: 10
         case .standard: 14
         case .spacious: 16
+        }
+    }
+
+    private var quotaMeter: QuotaMeter? {
+        guard [.tokenUsage, .weeklyQuota, .mcpUsage].contains(card.id) else {
+            return nil
+        }
+        guard let percent = Self.percentValue(from: card.primaryValue) else {
+            return nil
+        }
+        let fillHex: String
+        switch card.id {
+        case .tokenUsage:
+            fillHex = primaryRingHex
+        case .weeklyQuota:
+            fillHex = secondaryRingHex
+        case .mcpUsage:
+            fillHex = accentHex
+        default:
+            fillHex = accentHex
+        }
+        return QuotaMeter(value: percent / 100, fillHex: fillHex)
+    }
+
+    private static func percentValue(from text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasSuffix("%") else {
+            return nil
+        }
+        return Double(trimmed.dropLast())
+    }
+}
+
+private struct QuotaMeter: Equatable {
+    var value: Double
+    var fillHex: String
+
+    var clampedValue: Double {
+        max(0, min(1, value))
+    }
+}
+
+private struct QuotaMeterCardBody: View {
+    var meter: QuotaMeter
+    var note: String?
+    var lineLimit: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(height: 12)
+                    Capsule()
+                        .fill(Color(hex: meter.fillHex))
+                        .frame(width: geometry.size.width * meter.clampedValue, height: 12)
+                }
+            }
+            .frame(height: 12)
+
+            if let note, !note.isEmpty {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(lineLimit)
+            }
         }
     }
 }

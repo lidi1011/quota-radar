@@ -147,7 +147,7 @@ private extension ProviderSnapshot {
             cards = [
                 UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: "0%", trailingValue: "未连接", breakdown: nil, note: message),
                 UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: "0%", trailingValue: "新版套餐", breakdown: nil, note: nil),
-                UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: "0/0", trailingValue: "工具调用", breakdown: nil, note: nil),
+                UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: "0%", trailingValue: "工具调用", breakdown: nil, note: nil),
                 UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: GLMMultiplierCalculator.currentInfo().displayValue, trailingValue: "premium", breakdown: nil, note: message),
                 subscriptionCard
             ]

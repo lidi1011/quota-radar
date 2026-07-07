@@ -55,8 +55,8 @@ struct GLMProvider: UsageProvider, Sendable {
         ]
 
         let cards = [
-            UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: token?.usageText),
-            UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: weekly?.usageText ?? "新版套餐用户才会返回"),
+            UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: nil),
+            UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: nil),
             UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: mcp.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "TIME_LIMIT", breakdown: nil, note: mcp?.ratioText),
             UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: multiplier.displayValue, trailingValue: multiplier.periodLabel, breakdown: nil, note: multiplier.note(platform: stats.platformLabel)),
             subscription.usageCard()

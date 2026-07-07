@@ -147,7 +147,13 @@ struct ProviderPanelView: View {
     private var dashboardBlock: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.cardMinWidth), spacing: layout.cardSpacing)], spacing: layout.cardSpacing) {
                 ForEach(gridCards) { card in
-                    UsageCardView(card: card, accentHex: preferences.cardAccentHex, layout: layout)
+                    UsageCardView(
+                        card: card,
+                        accentHex: preferences.cardAccentHex,
+                        primaryRingHex: preferences.ringPrimaryHex,
+                        secondaryRingHex: preferences.ringSecondaryHex,
+                        layout: layout
+                    )
                 }
         }
     }
