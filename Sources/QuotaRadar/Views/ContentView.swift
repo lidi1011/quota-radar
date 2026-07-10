@@ -37,7 +37,10 @@ struct ContentView: View {
                 Group {
                     if policy.isEmpty {
                         emptyProviderView
-                            .frame(minWidth: 320, minHeight: 360)
+                            .frame(
+                                minWidth: policy.minimumBodyWidth,
+                                minHeight: policy.minimumBodyHeight
+                            )
                     } else {
                         providerStack(containerWidth: windowProxy.size.width, policy: policy)
                             .frame(minWidth: policy.minimumStackWidth)

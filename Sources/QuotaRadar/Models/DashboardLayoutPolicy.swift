@@ -41,6 +41,14 @@ struct DashboardLayoutPolicy {
         max(360, preset.ringOnlyPanelWidth + preset.contentVerticalPadding * 2)
     }
 
+    var minimumBodyWidth: CGFloat {
+        max(0, minimumContentWidth - preset.contentHorizontalPadding * 2)
+    }
+
+    var minimumBodyHeight: CGFloat {
+        max(0, minimumContentHeight - preset.contentVerticalPadding * 2)
+    }
+
     var fitsWidth: Bool {
         !providers.isEmpty && providers.allSatisfy { !$0.hasRenderedCards }
     }

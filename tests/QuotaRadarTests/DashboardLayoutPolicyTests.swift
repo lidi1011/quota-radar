@@ -178,5 +178,7 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         XCTAssertTrue(policy.isEmpty)
         XCTAssertEqual(policy.minimumContentWidth, 320)
         XCTAssertEqual(policy.minimumContentHeight, 426)
+        XCTAssertEqual(policy.minimumBodyWidth, 276)
+        XCTAssertEqual(policy.minimumBodyHeight, 390)
     }
 }

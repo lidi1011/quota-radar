@@ -172,10 +172,6 @@ enum LayoutPreset: String, CaseIterable, Codable, Identifiable, Hashable {
         max(ringColumnWidth, cardMinWidth) + panelPadding * 2
     }
 
-    var cardPanelPreferredWidth: CGFloat {
-        cardMinWidth * 2 + cardSpacing + panelPadding * 2
-    }
-
     private var ringOnlyHeaderHeight: CGFloat {
         switch self {
         case .compact: 42
