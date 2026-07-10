@@ -3,6 +3,7 @@
 !.env.example
 .codex/
 .planning/
+.worktrees/
 node_modules/
 .build/
 dist/
