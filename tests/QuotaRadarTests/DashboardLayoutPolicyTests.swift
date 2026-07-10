@@ -29,4 +29,42 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         XCTAssertEqual(policy.scrollAxes(viewportWidth: 352), .both)
         XCTAssertEqual(policy.minimumContentWidth, 424)
     }
+
+    func testExpandedWindowMovesLeftToRemainVisible() {
+        let frame = WindowFramePolicy.clampedFrame(
+            currentFrame: CGRect(x: 1568, y: 30, width: 352, height: 709),
+            targetSize: CGSize(width: 996, height: 657),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        )
+
+        XCTAssertEqual(frame.maxX, 1920)
+        XCTAssertEqual(frame.minX, 924)
+    }
+
+    func testHorizontalRingOnlyLayoutFitsHeight() {
+        let policy = DashboardLayoutPolicy(
+            preset: .standard,
+            providerLayoutMode: .horizontal,
+            providers: [
+                .init(provider: .codex, hasRenderedCards: false),
+                .init(provider: .glm, hasRenderedCards: false)
+            ]
+        )
+
+        XCTAssertTrue(policy.fitsHeight)
+        XCTAssertEqual(policy.minimumContentHeight, 426)
+    }
+
+    func testVerticalSpaciousLayoutRequiresCompleteFirstPanelHeight() {
+        let policy = DashboardLayoutPolicy(
+            preset: .spacious,
+            providerLayoutMode: .vertical,
+            providers: [
+                .init(provider: .codex, hasRenderedCards: false),
+                .init(provider: .glm, hasRenderedCards: false)
+            ]
+        )
+
+        XCTAssertEqual(policy.minimumContentHeight, 506)
+    }
 }

@@ -33,15 +33,34 @@ struct DashboardLayoutPolicy {
         max(320, minimumStackWidth + preset.contentHorizontalPadding * 2)
     }
 
+    var minimumContentHeight: CGFloat {
+        max(360, preset.ringOnlyPanelWidth + preset.contentVerticalPadding * 2)
+    }
+
+    var fitsWidth: Bool {
+        !providers.isEmpty && providers.allSatisfy { !$0.hasRenderedCards }
+    }
+
+    var fitsHeight: Bool {
+        guard !providers.isEmpty else { return false }
+        return providers.count == 1
+            || (providerLayoutMode == .horizontal && providers.allSatisfy { !$0.hasRenderedCards })
+    }
+
     func scrollAxes(viewportWidth: CGFloat) -> DashboardScrollAxes {
         minimumContentWidth > viewportWidth + 1 ? .both : .vertical
     }
 
     func panelWidth(for provider: ProviderID, viewportWidth: CGFloat) -> CGFloat? {
-        guard providerLayoutMode == .horizontal,
-              let content = providers.first(where: { $0.provider == provider }) else {
+        guard let content = providers.first(where: { $0.provider == provider }) else {
             return nil
         }
+
+        if !content.hasRenderedCards {
+            return preset.ringOnlyPanelWidth
+        }
+
+        guard providerLayoutMode == .horizontal else { return nil }
 
         let providerCount = max(1, providers.count)
         let availableWidth = viewportWidth
@@ -52,5 +71,28 @@ struct DashboardLayoutPolicy {
             ? preset.cardPanelMinimumWidth
             : preset.ringOnlyPanelWidth
         return max(widthShare, minimumWidth)
+    }
+}
+
+enum WindowFramePolicy {
+    static func clampedFrame(
+        currentFrame: CGRect,
+        targetSize: CGSize,
+        visibleFrame: CGRect
+    ) -> CGRect {
+        let size = CGSize(
+            width: min(targetSize.width, visibleFrame.width),
+            height: min(targetSize.height, visibleFrame.height)
+        )
+        let x = min(
+            max(currentFrame.minX, visibleFrame.minX),
+            visibleFrame.maxX - size.width
+        )
+        let proposedY = currentFrame.maxY - size.height
+        let y = min(
+            max(proposedY, visibleFrame.minY),
+            visibleFrame.maxY - size.height
+        )
+        return CGRect(origin: CGPoint(x: x, y: y), size: size)
     }
 }

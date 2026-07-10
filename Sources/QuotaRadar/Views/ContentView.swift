@@ -13,10 +13,29 @@ struct ContentView: View {
         ProviderID.allCases.filter { settings.isProviderVisible($0) }
     }
 
+    private var providerLayoutContents: [ProviderLayoutContent] {
+        visibleProviders.map { provider in
+            ProviderLayoutContent(
+                provider: provider,
+                hasRenderedCards: !settings.preferences(for: provider).visibleCards.isEmpty
+            )
+        }
+    }
+
+    private var layoutPolicy: DashboardLayoutPolicy {
+        DashboardLayoutPolicy(
+            preset: settings.layoutPreset,
+            providerLayoutMode: settings.providerLayoutMode,
+            providers: providerLayoutContents
+        )
+    }
+
     var body: some View {
         GeometryReader { windowProxy in
-            ScrollView(scrollAxes) {
-                providerStack(containerWidth: windowProxy.size.width)
+            let policy = layoutPolicy
+            ScrollView(scrollAxes(policy: policy, viewportWidth: windowProxy.size.width)) {
+                providerStack(containerWidth: windowProxy.size.width, policy: policy)
+                    .frame(minWidth: policy.minimumStackWidth)
                 .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
                 .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
                 .background(
@@ -30,10 +49,12 @@ struct ContentView: View {
             }
             .background(
                 MainWindowSizeFitter(
-                    contentWidth: fittedContentWidth,
+                    contentWidth: policy.fitsWidth ? policy.minimumContentWidth : nil,
                     contentHeight: contentHeight,
-                    shouldFitWidth: fittedContentWidth != nil,
-                    shouldFitHeight: visibleProviderCount == 1
+                    minimumContentWidth: policy.minimumContentWidth,
+                    minimumContentHeight: policy.minimumContentHeight,
+                    shouldFitWidth: policy.fitsWidth,
+                    shouldFitHeight: policy.fitsHeight
                 )
             )
             .background(
@@ -62,44 +83,30 @@ struct ContentView: View {
         }
     }
 
-    private var scrollAxes: Axis.Set {
-        settings.providerLayoutMode == .horizontal ? [.vertical, .horizontal] : [.vertical]
-    }
-
-    private var fittedContentWidth: CGFloat? {
-        guard !visibleProviders.isEmpty,
-              visibleProviders.allSatisfy({ settings.preferences(for: $0).visibleCards.isEmpty }) else {
-            return nil
-        }
-
-        let layout = settings.layoutPreset
-        let panelWidths = visibleProviders.map { _ in emptyProviderPanelWidth(layout: layout) }
-        let panelWidth: CGFloat
-        switch settings.providerLayoutMode {
+    private func scrollAxes(policy: DashboardLayoutPolicy, viewportWidth: CGFloat) -> Axis.Set {
+        switch policy.scrollAxes(viewportWidth: viewportWidth) {
         case .vertical:
-            panelWidth = panelWidths.max() ?? 0
-        case .horizontal:
-            panelWidth = panelWidths.reduce(0, +)
-                + CGFloat(max(0, panelWidths.count - 1)) * layout.contentSpacing
+            [.vertical]
+        case .both:
+            [.vertical, .horizontal]
         }
-        return panelWidth + layout.contentHorizontalPadding * 2
     }
 
     @ViewBuilder
-    private func providerStack(containerWidth: CGFloat) -> some View {
+    private func providerStack(containerWidth: CGFloat, policy: DashboardLayoutPolicy) -> some View {
         switch settings.providerLayoutMode {
         case .vertical:
             VStack(alignment: .leading, spacing: settings.layoutPreset.contentSpacing) {
-                providerPanels()
+                providerPanels(containerWidth: containerWidth, policy: policy)
             }
         case .horizontal:
             HStack(alignment: .top, spacing: settings.layoutPreset.contentSpacing) {
-                providerPanels(containerWidth: containerWidth)
+                providerPanels(containerWidth: containerWidth, policy: policy)
             }
         }
     }
 
-    private func providerPanels(containerWidth: CGFloat? = nil) -> some View {
+    private func providerPanels(containerWidth: CGFloat, policy: DashboardLayoutPolicy) -> some View {
         ForEach(visibleProviders) { provider in
             ProviderPanelView(
                 provider: provider,
@@ -111,57 +118,8 @@ struct ContentView: View {
             ) {
                 Task { await store.refresh(provider) }
             }
-            .frame(width: panelWidth(for: provider, containerWidth: containerWidth))
+            .frame(width: policy.panelWidth(for: provider, viewportWidth: containerWidth))
         }
-    }
-
-    private func panelWidth(for provider: ProviderID, containerWidth: CGFloat?) -> CGFloat? {
-        let layout = settings.layoutPreset
-        guard !settings.preferences(for: provider).visibleCards.isEmpty else {
-            return emptyProviderPanelWidth(layout: layout)
-        }
-
-        guard settings.providerLayoutMode == .horizontal, let containerWidth else {
-            return nil
-        }
-        return horizontalProviderPanelWidth(containerWidth: containerWidth)
-    }
-
-    private func horizontalProviderPanelWidth(containerWidth: CGFloat) -> CGFloat {
-        let layout = settings.layoutPreset
-        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
-        let availableWidth = containerWidth - layout.contentHorizontalPadding * 2 - layout.contentSpacing
-        let halfWindowWidth = max(0, availableWidth / 2)
-        let twoCardGridWidth = layout.cardMinWidth * 2 + layout.cardSpacing + layout.panelPadding * 2
-        return max(halfWindowWidth, twoCardGridWidth, ringWidth)
-    }
-
-    private func emptyProviderPanelWidth(layout: LayoutPreset) -> CGFloat {
-        let ringWidth = layout.ringColumnWidth + layout.panelPadding * 2
-        return max(ringWidth, emptyProviderPanelSquareWidth(layout: layout))
-    }
-
-    private func emptyProviderPanelSquareWidth(layout: LayoutPreset) -> CGFloat {
-        let headerHeight: CGFloat
-        let legendHeight: CGFloat
-        switch layout {
-        case .compact:
-            headerHeight = 42
-            legendHeight = 42
-        case .standard:
-            headerHeight = 50
-            legendHeight = 50
-        case .spacious:
-            headerHeight = 58
-            legendHeight = 58
-        }
-
-        return layout.panelPadding * 2
-            + headerHeight
-            + layout.panelSpacing
-            + layout.ringSize
-            + 12
-            + legendHeight
     }
 
 }
@@ -175,76 +133,66 @@ private struct ContentHeightPreferenceKey: PreferenceKey {
 }
 
 private struct MainWindowSizeFitter: NSViewRepresentable {
-    private static let minimumContentSize = NSSize(width: 320, height: 360)
-
     var contentWidth: CGFloat?
     var contentHeight: CGFloat
+    var minimumContentWidth: CGFloat
+    var minimumContentHeight: CGFloat
     var shouldFitWidth: Bool
     var shouldFitHeight: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
 
     func makeNSView(context: Context) -> NSView {
         NSView()
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        guard (shouldFitWidth && contentWidth != nil) || (shouldFitHeight && contentHeight > 0) else {
-            return
-        }
-
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             let currentContentWidth = window.contentLayoutRect.width
             let currentContentHeight = window.contentLayoutRect.height
-            var targetWidth = currentContentWidth > 0 ? currentContentWidth : window.frame.width
-            var targetHeight = currentContentHeight > 0 ? currentContentHeight : window.frame.height
+            let visibleFrame = window.screen?.visibleFrame ?? window.frame
+            let maximumContentRect = window.contentRect(forFrameRect: visibleFrame)
+            let minimumWidth = min(minimumContentWidth, maximumContentRect.width)
+            let minimumHeight = min(minimumContentHeight, maximumContentRect.height)
+
+            window.contentMinSize = NSSize(width: minimumWidth, height: minimumHeight)
+            window.minSize = window.frameRect(
+                forContentRect: NSRect(
+                    origin: .zero,
+                    size: NSSize(width: minimumWidth, height: minimumHeight)
+                )
+            ).size
+
+            var targetWidth = max(currentContentWidth, minimumWidth)
+            var targetHeight = max(currentContentHeight, minimumHeight)
 
             if shouldFitWidth, let contentWidth {
-                targetWidth = max(Self.minimumContentSize.width, ceil(contentWidth))
+                targetWidth = max(minimumWidth, ceil(contentWidth))
             }
             if shouldFitHeight, contentHeight > 0 {
-                targetHeight = max(Self.minimumContentSize.height, ceil(contentHeight))
+                targetHeight = max(minimumHeight, ceil(contentHeight))
             }
 
-            guard abs(context.coordinator.lastAppliedWidth - targetWidth) > 1
-                || abs(context.coordinator.lastAppliedHeight - targetHeight) > 1 else {
+            targetWidth = min(targetWidth, maximumContentRect.width)
+            targetHeight = min(targetHeight, maximumContentRect.height)
+
+            let targetFrameSize = window.frameRect(
+                forContentRect: NSRect(
+                    origin: .zero,
+                    size: NSSize(width: targetWidth, height: targetHeight)
+                )
+            ).size
+            let targetFrame = WindowFramePolicy.clampedFrame(
+                currentFrame: window.frame,
+                targetSize: targetFrameSize,
+                visibleFrame: visibleFrame
+            )
+            guard abs(window.frame.minX - targetFrame.minX) > 1
+                || abs(window.frame.minY - targetFrame.minY) > 1
+                || abs(window.frame.width - targetFrame.width) > 1
+                || abs(window.frame.height - targetFrame.height) > 1 else {
                 return
             }
-
-            context.coordinator.lastAppliedWidth = targetWidth
-            context.coordinator.lastAppliedHeight = targetHeight
-
-            if abs(currentContentWidth - targetWidth) > 12 || abs(currentContentHeight - targetHeight) > 12 {
-                let targetContentSize = NSSize(width: targetWidth, height: targetHeight)
-                let contentMinimumSize = NSSize(
-                    width: min(Self.minimumContentSize.width, targetWidth),
-                    height: min(Self.minimumContentSize.height, targetHeight)
-                )
-                window.contentMinSize = contentMinimumSize
-                window.minSize = window.frameRect(
-                    forContentRect: NSRect(origin: .zero, size: contentMinimumSize)
-                ).size
-
-                let targetFrameSize = window.frameRect(
-                    forContentRect: NSRect(origin: .zero, size: targetContentSize)
-                ).size
-                let currentFrame = window.frame
-                let targetFrame = NSRect(
-                    x: currentFrame.minX,
-                    y: currentFrame.maxY - targetFrameSize.height,
-                    width: targetFrameSize.width,
-                    height: targetFrameSize.height
-                )
-                window.setFrame(targetFrame, display: true, animate: false)
-            }
+            window.setFrame(targetFrame, display: true, animate: false)
         }
-    }
-
-    final class Coordinator {
-        var lastAppliedWidth: CGFloat = 0
-        var lastAppliedHeight: CGFloat = 0
     }
 }
