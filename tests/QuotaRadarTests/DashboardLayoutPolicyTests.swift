@@ -41,6 +41,26 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         XCTAssertEqual(frame.minX, 924)
     }
 
+    func testContentLayoutHeightIncludesToolbarInsetInWindowFrame() {
+        let size = WindowFramePolicy.frameSize(
+            contentLayoutSize: CGSize(width: 434, height: 834),
+            layoutInsets: CGSize(width: 0, height: 52),
+            visibleFrame: CGRect(x: 0, y: 76, width: 1920, height: 974)
+        )
+
+        XCTAssertEqual(size, CGSize(width: 434, height: 886))
+    }
+
+    func testContentLayoutHeightClampsAfterAddingToolbarInset() {
+        let size = WindowFramePolicy.frameSize(
+            contentLayoutSize: CGSize(width: 514, height: 988),
+            layoutInsets: CGSize(width: 0, height: 52),
+            visibleFrame: CGRect(x: 0, y: 76, width: 1920, height: 974)
+        )
+
+        XCTAssertEqual(size, CGSize(width: 514, height: 974))
+    }
+
     func testHorizontalRingOnlyLayoutFitsHeight() {
         let policy = DashboardLayoutPolicy(
             preset: .standard,
@@ -66,6 +86,7 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         )
 
         XCTAssertTrue(policy.fitsHeight)
+        XCTAssertEqual(policy.ringOnlyContentHeight, 676)
     }
 
     func testVerticalSpaciousLayoutRequiresCompleteFirstPanelHeight() {
@@ -79,6 +100,30 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         )
 
         XCTAssertEqual(policy.minimumContentHeight, 506)
+        XCTAssertEqual(policy.ringOnlyContentHeight, 988)
+    }
+
+    func testHorizontalRingOnlyLayoutUsesSinglePanelHeight() {
+        let policy = DashboardLayoutPolicy(
+            preset: .standard,
+            providerLayoutMode: .horizontal,
+            providers: [
+                .init(provider: .codex, hasRenderedCards: false),
+                .init(provider: .glm, hasRenderedCards: false)
+            ]
+        )
+
+        XCTAssertEqual(policy.ringOnlyContentHeight, 426)
+    }
+
+    func testRenderedCardsDoNotUseRingOnlyContentHeight() {
+        let policy = DashboardLayoutPolicy(
+            preset: .standard,
+            providerLayoutMode: .vertical,
+            providers: [.init(provider: .codex, hasRenderedCards: true)]
+        )
+
+        XCTAssertNil(policy.ringOnlyContentHeight)
     }
 
     func testSelectedButUnavailableCardDoesNotCountAsRendered() {

@@ -59,6 +59,24 @@ struct DashboardLayoutPolicy {
             || providers.allSatisfy { !$0.hasRenderedCards }
     }
 
+    var ringOnlyContentHeight: CGFloat? {
+        guard !providers.isEmpty,
+              providers.allSatisfy({ !$0.hasRenderedCards }) else {
+            return nil
+        }
+
+        let panelHeights = providers.map { _ in preset.ringOnlyPanelWidth }
+        let stackHeight: CGFloat
+        switch providerLayoutMode {
+        case .vertical:
+            stackHeight = panelHeights.reduce(0, +)
+                + CGFloat(max(0, panelHeights.count - 1)) * preset.contentSpacing
+        case .horizontal:
+            stackHeight = panelHeights.max() ?? 0
+        }
+        return stackHeight + preset.contentVerticalPadding * 2
+    }
+
     func scrollAxes(viewportWidth: CGFloat) -> DashboardScrollAxes {
         minimumContentWidth > viewportWidth + 1 ? .both : .vertical
     }
@@ -87,6 +105,23 @@ struct DashboardLayoutPolicy {
 }
 
 enum WindowFramePolicy {
+    static func frameSize(
+        contentLayoutSize: CGSize,
+        layoutInsets: CGSize,
+        visibleFrame: CGRect
+    ) -> CGSize {
+        CGSize(
+            width: min(
+                max(0, contentLayoutSize.width) + max(0, layoutInsets.width),
+                visibleFrame.width
+            ),
+            height: min(
+                max(0, contentLayoutSize.height) + max(0, layoutInsets.height),
+                visibleFrame.height
+            )
+        )
+    }
+
     static func clampedFrame(
         currentFrame: CGRect,
         targetSize: CGSize,

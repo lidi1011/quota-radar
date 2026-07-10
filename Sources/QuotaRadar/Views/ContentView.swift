@@ -60,7 +60,7 @@ struct ContentView: View {
             .background(
                 MainWindowSizeFitter(
                     contentWidth: policy.fitsWidth ? policy.minimumContentWidth : nil,
-                    contentHeight: contentHeight,
+                    contentHeight: policy.ringOnlyContentHeight ?? contentHeight,
                     minimumContentWidth: policy.minimumContentWidth,
                     minimumContentHeight: policy.minimumContentHeight,
                     shouldFitWidth: policy.fitsWidth,
@@ -171,17 +171,23 @@ private struct MainWindowSizeFitter: NSViewRepresentable {
             let currentContentWidth = window.contentLayoutRect.width
             let currentContentHeight = window.contentLayoutRect.height
             let visibleFrame = window.screen?.visibleFrame ?? window.frame
-            let maximumContentRect = window.contentRect(forFrameRect: visibleFrame)
-            let minimumWidth = min(minimumContentWidth, maximumContentRect.width)
-            let minimumHeight = min(minimumContentHeight, maximumContentRect.height)
+            let layoutInsets = CGSize(
+                width: max(0, window.frame.width - currentContentWidth),
+                height: max(0, window.frame.height - currentContentHeight)
+            )
+            let maximumContentSize = CGSize(
+                width: max(0, visibleFrame.width - layoutInsets.width),
+                height: max(0, visibleFrame.height - layoutInsets.height)
+            )
+            let minimumWidth = min(minimumContentWidth, maximumContentSize.width)
+            let minimumHeight = min(minimumContentHeight, maximumContentSize.height)
 
             window.contentMinSize = NSSize(width: minimumWidth, height: minimumHeight)
-            window.minSize = window.frameRect(
-                forContentRect: NSRect(
-                    origin: .zero,
-                    size: NSSize(width: minimumWidth, height: minimumHeight)
-                )
-            ).size
+            window.minSize = WindowFramePolicy.frameSize(
+                contentLayoutSize: CGSize(width: minimumWidth, height: minimumHeight),
+                layoutInsets: layoutInsets,
+                visibleFrame: visibleFrame
+            )
 
             var targetWidth = max(currentContentWidth, minimumWidth)
             var targetHeight = max(currentContentHeight, minimumHeight)
@@ -193,15 +199,14 @@ private struct MainWindowSizeFitter: NSViewRepresentable {
                 targetHeight = max(minimumHeight, ceil(contentHeight))
             }
 
-            targetWidth = min(targetWidth, maximumContentRect.width)
-            targetHeight = min(targetHeight, maximumContentRect.height)
+            targetWidth = min(targetWidth, maximumContentSize.width)
+            targetHeight = min(targetHeight, maximumContentSize.height)
 
-            let targetFrameSize = window.frameRect(
-                forContentRect: NSRect(
-                    origin: .zero,
-                    size: NSSize(width: targetWidth, height: targetHeight)
-                )
-            ).size
+            let targetFrameSize = WindowFramePolicy.frameSize(
+                contentLayoutSize: CGSize(width: targetWidth, height: targetHeight),
+                layoutInsets: layoutInsets,
+                visibleFrame: visibleFrame
+            )
             let targetFrame = WindowFramePolicy.clampedFrame(
                 currentFrame: window.frame,
                 targetSize: targetFrameSize,
