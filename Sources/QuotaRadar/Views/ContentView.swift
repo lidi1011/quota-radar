@@ -5,19 +5,19 @@ struct ContentView: View {
     @EnvironmentObject private var store: UsageStore
     @State private var contentHeight: CGFloat = 0
 
-    private var visibleProviderCount: Int {
-        visibleProviders.count
-    }
-
     private var visibleProviders: [ProviderID] {
         ProviderID.allCases.filter { settings.isProviderVisible($0) }
     }
 
     private var providerLayoutContents: [ProviderLayoutContent] {
         visibleProviders.map { provider in
-            ProviderLayoutContent(
+            let preferences = settings.preferences(for: provider)
+            return ProviderLayoutContent(
                 provider: provider,
-                hasRenderedCards: !settings.preferences(for: provider).visibleCards.isEmpty
+                hasRenderedCards: ProviderPanelView.hasRenderedCards(
+                    snapshot: store.snapshots[provider],
+                    preferences: preferences
+                )
             )
         }
     }
@@ -113,8 +113,7 @@ struct ContentView: View {
                 snapshot: store.snapshots[provider],
                 state: store.states[provider] ?? .idle,
                 preferences: settings.preferences(for: provider),
-                layout: settings.layoutPreset,
-                providerLayoutMode: settings.providerLayoutMode
+                layout: settings.layoutPreset
             ) {
                 Task { await store.refresh(provider) }
             }

@@ -6,55 +6,53 @@ struct ProviderPanelView: View {
     var state: ProviderLoadState
     var preferences: ProviderPreferences
     var layout: LayoutPreset
-    var providerLayoutMode: ProviderLayoutMode = .vertical
     var refresh: () -> Void
 
-    private var visibleCards: [UsageCard] {
-        (snapshot?.cards ?? []).filter { preferences.visibleCards.contains($0.id) }
-    }
-
-    private var progressCard: UsageCard? {
-        guard preferences.visibleCards.contains(.planProgress),
-              let progress = snapshot?.progress else {
-            return nil
-        }
-        return UsageCard(
-            id: .planProgress,
-            title: progress.title,
-            systemImage: "chart.line.uptrend.xyaxis",
-            primaryValue: progress.currentValue,
-            trailingValue: "/ \(progress.maxValue)",
-            breakdown: nil,
-            note: "当前 \(Int(progress.progress * 100))% · Plus / Pro100 / Pro200 刻度",
-            progress: progress
-        )
-    }
-
-    private var resetCreditsCard: UsageCard? {
-        guard preferences.visibleCards.contains(.resetCredits) else {
-            return nil
-        }
-        return snapshot?.cards.first { $0.id == .resetCredits }
-    }
-
-    private var subscriptionExpiryCard: UsageCard? {
-        guard preferences.visibleCards.contains(.subscriptionExpiry) else {
-            return nil
-        }
-        return snapshot?.cards.first { $0.id == .subscriptionExpiry }
-    }
-
     private var gridCards: [UsageCard] {
+        Self.renderedCards(snapshot: snapshot, preferences: preferences)
+    }
+
+    nonisolated static func hasRenderedCards(
+        snapshot: ProviderSnapshot?,
+        preferences: ProviderPreferences
+    ) -> Bool {
+        !renderedCards(snapshot: snapshot, preferences: preferences).isEmpty
+    }
+
+    nonisolated static func renderedCards(
+        snapshot: ProviderSnapshot?,
+        preferences: ProviderPreferences
+    ) -> [UsageCard] {
+        let visibleCards = (snapshot?.cards ?? []).filter {
+            preferences.visibleCards.contains($0.id)
+        }
         var cards = visibleCards.filter { card in
             ![.planProgress, .resetCredits, .subscriptionExpiry].contains(card.id)
         }
-        if let progressCard {
-            cards.append(progressCard)
+
+        if preferences.visibleCards.contains(.planProgress),
+           let progress = snapshot?.progress {
+            cards.append(
+                UsageCard(
+                    id: .planProgress,
+                    title: progress.title,
+                    systemImage: "chart.line.uptrend.xyaxis",
+                    primaryValue: progress.currentValue,
+                    trailingValue: "/ \(progress.maxValue)",
+                    breakdown: nil,
+                    note: "当前 \(Int(progress.progress * 100))% · Plus / Pro100 / Pro200 刻度",
+                    progress: progress
+                )
+            )
         }
-        if let resetCreditsCard {
+
+        if preferences.visibleCards.contains(.resetCredits),
+           let resetCreditsCard = snapshot?.cards.first(where: { $0.id == .resetCredits }) {
             cards.append(resetCreditsCard)
         }
-        if let subscriptionExpiryCard {
+
+        if preferences.visibleCards.contains(.subscriptionExpiry),
+           let subscriptionExpiryCard = snapshot?.cards.first(where: { $0.id == .subscriptionExpiry }) {
             cards.append(subscriptionExpiryCard)
         }
         return cards
@@ -66,8 +64,6 @@ struct ProviderPanelView: View {
 
             if gridCards.isEmpty {
                 centeredRingBlock
-            } else if providerLayoutMode == .horizontal {
-                verticalPanelContent
             } else {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .center, spacing: layout.horizontalBlockSpacing) {
@@ -91,13 +87,6 @@ struct ProviderPanelView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.white.opacity(0.13), lineWidth: 1)
         )
-    }
-
-    private var verticalPanelContent: some View {
-        VStack(alignment: .leading, spacing: layout.panelSpacing) {
-            centeredRingBlock
-            dashboardBlock
-        }
     }
 
     private var centeredRingBlock: some View {

@@ -67,4 +67,54 @@ final class DashboardLayoutPolicyTests: XCTestCase {
 
         XCTAssertEqual(policy.minimumContentHeight, 506)
     }
+
+    func testSelectedButUnavailableCardDoesNotCountAsRendered() {
+        let preferences = ProviderPreferences(
+            ringPrimaryHex: "#1E88FF",
+            ringSecondaryHex: "#8B5CF6",
+            cardAccentHex: "#2563EB",
+            visibleCards: [.subscriptionExpiry]
+        )
+
+        XCTAssertFalse(
+            ProviderPanelView.hasRenderedCards(
+                snapshot: nil,
+                preferences: preferences
+            )
+        )
+    }
+
+    func testAvailableSelectedCardCountsAsRendered() {
+        let snapshot = ProviderSnapshot(
+            provider: .codex,
+            generatedAt: Date(timeIntervalSince1970: 0),
+            windows: [],
+            cards: [
+                UsageCard(
+                    id: .today,
+                    title: "今日",
+                    systemImage: "sun.max.fill",
+                    primaryValue: "1M",
+                    trailingValue: "",
+                    breakdown: nil,
+                    note: nil
+                )
+            ],
+            progress: nil,
+            statusMessage: ""
+        )
+        let preferences = ProviderPreferences(
+            ringPrimaryHex: "#1E88FF",
+            ringSecondaryHex: "#8B5CF6",
+            cardAccentHex: "#2563EB",
+            visibleCards: [.today]
+        )
+
+        XCTAssertTrue(
+            ProviderPanelView.hasRenderedCards(
+                snapshot: snapshot,
+                preferences: preferences
+            )
+        )
+    }
 }
