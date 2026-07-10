@@ -158,6 +158,35 @@ enum LayoutPreset: String, CaseIterable, Codable, Identifiable, Hashable {
         case .spacious: 4
         }
     }
+
+    var ringOnlyPanelWidth: CGFloat {
+        panelPadding * 2
+            + ringOnlyHeaderHeight
+            + panelSpacing
+            + ringSize
+            + 12
+            + ringOnlyLegendHeight
+    }
+
+    var cardPanelMinimumWidth: CGFloat {
+        max(ringColumnWidth, cardMinWidth) + panelPadding * 2
+    }
+
+    var cardPanelPreferredWidth: CGFloat {
+        cardMinWidth * 2 + cardSpacing + panelPadding * 2
+    }
+
+    private var ringOnlyHeaderHeight: CGFloat {
+        switch self {
+        case .compact: 42
+        case .standard: 50
+        case .spacious: 58
+        }
+    }
+
+    private var ringOnlyLegendHeight: CGFloat {
+        ringOnlyHeaderHeight
+    }
 }
 
 enum ProviderLayoutMode: String, CaseIterable, Codable, Identifiable, Hashable {
