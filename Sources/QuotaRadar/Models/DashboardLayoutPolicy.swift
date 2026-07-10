@@ -15,6 +15,10 @@ struct DashboardLayoutPolicy {
     var providerLayoutMode: ProviderLayoutMode
     var providers: [ProviderLayoutContent]
 
+    var isEmpty: Bool {
+        providers.isEmpty
+    }
+
     var minimumStackWidth: CGFloat {
         let widths = providers.map { content in
             content.hasRenderedCards ? preset.cardPanelMinimumWidth : preset.ringOnlyPanelWidth

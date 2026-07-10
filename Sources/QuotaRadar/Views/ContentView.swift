@@ -34,8 +34,15 @@ struct ContentView: View {
         GeometryReader { windowProxy in
             let policy = layoutPolicy
             ScrollView(scrollAxes(policy: policy, viewportWidth: windowProxy.size.width)) {
-                providerStack(containerWidth: windowProxy.size.width, policy: policy)
-                    .frame(minWidth: policy.minimumStackWidth)
+                Group {
+                    if policy.isEmpty {
+                        emptyProviderView
+                            .frame(minWidth: 320, minHeight: 360)
+                    } else {
+                        providerStack(containerWidth: windowProxy.size.width, policy: policy)
+                            .frame(minWidth: policy.minimumStackWidth)
+                    }
+                }
                 .padding(.horizontal, settings.layoutPreset.contentHorizontalPadding)
                 .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
                 .background(
@@ -89,6 +96,18 @@ struct ContentView: View {
             [.vertical]
         case .both:
             [.vertical, .horizontal]
+        }
+    }
+
+    private var emptyProviderView: some View {
+        ContentUnavailableView {
+            Label("未显示 Provider", systemImage: "rectangle.stack.badge.plus")
+        } description: {
+            Text("请在设置中启用 Codex 或 GLM。")
+        } actions: {
+            SettingsLink {
+                Text("打开设置")
+            }
         }
     }
 

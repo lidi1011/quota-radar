@@ -69,7 +69,9 @@ Use the typography tokens as the source of truth for visible hierarchy. Large nu
 
 ## Layout
 
-Use stable spacing tokens and responsive constraints. Provider panels default to vertical stacking in the normal macOS window, with an optional horizontal provider layout for wide review sessions. Within each panel, the quota ring and cards sit side by side on wide windows and reflow vertically on narrow windows.
+Use stable spacing tokens and responsive constraints. Provider panels default to vertical stacking in the normal macOS window, with an optional horizontal provider layout for wide review sessions. Provider arrangement controls only the outer Codex/GLM stack. Within each panel, the quota ring and cards independently sit side by side when the panel is wide enough and reflow vertically when it is narrow.
+
+Window sizing must remain inside the active screen's visible frame. Each density keeps one complete provider ring reachable, and content that cannot fit uses horizontal or vertical scrolling rather than clipping. Ring-only horizontal layouts fit their height to the tallest panel. Mixed card/ring states use the cards that are actually rendered, not only the saved visibility preferences. When no Provider is visible, show an explicit empty state with a Settings entry point.
 
 ## Elevation & Depth
 

@@ -117,4 +117,53 @@ final class DashboardLayoutPolicyTests: XCTestCase {
             )
         )
     }
+
+    func testAllPrimaryLayoutCombinationsKeepOverflowReachable() {
+        for preset in LayoutPreset.allCases {
+            for providerLayoutMode in ProviderLayoutMode.allCases {
+                for hasRenderedCards in [false, true] {
+                    let policy = DashboardLayoutPolicy(
+                        preset: preset,
+                        providerLayoutMode: providerLayoutMode,
+                        providers: [
+                            .init(provider: .codex, hasRenderedCards: hasRenderedCards),
+                            .init(provider: .glm, hasRenderedCards: hasRenderedCards)
+                        ]
+                    )
+
+                    XCTAssertGreaterThanOrEqual(policy.minimumContentWidth, 320)
+                    XCTAssertGreaterThanOrEqual(policy.minimumContentHeight, 360)
+                    if policy.scrollAxes(viewportWidth: 352) == .vertical {
+                        XCTAssertLessThanOrEqual(policy.minimumContentWidth, 353)
+                    }
+                }
+            }
+        }
+    }
+
+    func testMixedHorizontalLayoutUsesBothAxesInNarrowViewport() {
+        let policy = DashboardLayoutPolicy(
+            preset: .spacious,
+            providerLayoutMode: .horizontal,
+            providers: [
+                .init(provider: .codex, hasRenderedCards: true),
+                .init(provider: .glm, hasRenderedCards: false)
+            ]
+        )
+
+        XCTAssertEqual(policy.scrollAxes(viewportWidth: 514), .both)
+        XCTAssertEqual(policy.minimumContentWidth, 906)
+    }
+
+    func testNoProvidersReportsEmptyState() {
+        let policy = DashboardLayoutPolicy(
+            preset: .standard,
+            providerLayoutMode: .vertical,
+            providers: []
+        )
+
+        XCTAssertTrue(policy.isEmpty)
+        XCTAssertEqual(policy.minimumContentWidth, 320)
+        XCTAssertEqual(policy.minimumContentHeight, 426)
+    }
 }
