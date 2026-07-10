@@ -56,8 +56,8 @@ struct GLMProvider: UsageProvider, Sendable {
         ]
 
         let cards = [
-            UsageCard(id: .tokenUsage, title: "5 小时", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: nil),
-            UsageCard(id: .weeklyQuota, title: "7 天限额", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: nil),
+            UsageCard(id: .tokenUsage, title: "5 小时已使用", systemImage: "gauge.with.dots.needle.bottom.50percent", primaryValue: token.map { "\($0.percentage)%" } ?? "N/A", trailingValue: token?.resetDateTimeText ?? "未返回重置", breakdown: nil, note: nil, meterValue: token.map(Self.remainingMeterValue)),
+            UsageCard(id: .weeklyQuota, title: "7 天已使用", systemImage: "calendar.badge.clock", primaryValue: weekly.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "unit=6", breakdown: nil, note: nil, meterValue: weekly.map(Self.remainingMeterValue)),
             UsageCard(id: .mcpUsage, title: "MCP", systemImage: "point.3.connected.trianglepath.dotted", primaryValue: mcp.map { "\($0.percentage)%" } ?? "N/A", trailingValue: "TIME_LIMIT", breakdown: nil, note: mcp?.ratioText, meterValue: mcp.map(Self.mcpMeterValue)),
             UsageCard(id: .multiplier, title: "倍率", systemImage: "bolt.badge.clock", primaryValue: multiplier.displayValue, trailingValue: multiplier.periodLabel, breakdown: nil, note: multiplier.note(platform: stats.platformLabel)),
             subscription.usageCard()
@@ -97,6 +97,10 @@ struct GLMProvider: UsageProvider, Sendable {
         let denominator = max(1, min(usage.limit, mcpMeterLimit))
         let remaining = 1 - Double(usage.used) / Double(denominator)
         return max(0, min(1, remaining))
+    }
+
+    private static func remainingMeterValue(_ usage: GLMQuotaUsage) -> Double {
+        max(0, min(1, 1 - Double(usage.percentage) / 100))
     }
 }
 

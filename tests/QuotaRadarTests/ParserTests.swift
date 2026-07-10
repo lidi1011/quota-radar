@@ -611,6 +611,37 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(card.meterValue ?? 0, 0.785, accuracy: 0.001)
     }
 
+    func testGLMProviderSeparatesUsedPercentFromRemainingQuotaMeters() async throws {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.glmAuthToken = "test-token"
+        let client = GLMQuotaClient { _, _ in
+            GLMUsageStats(
+                platform: .zhipu,
+                tokenUsage: GLMQuotaUsage(used: 0, limit: 100, percentage: 0, timeWindow: "5h", resetAt: nil),
+                weeklyUsage: GLMQuotaUsage(used: 3, limit: 100, percentage: 3, timeWindow: "7d", resetAt: nil),
+                mcpUsage: nil
+            )
+        }
+
+        let snapshot = try await GLMProvider(
+            settings: settings,
+            cache: GLMQuotaCache(),
+            client: client
+        ).snapshot(force: true)
+        let tokenCard = try XCTUnwrap(snapshot.cards.first { $0.id == .tokenUsage })
+        let weeklyCard = try XCTUnwrap(snapshot.cards.first { $0.id == .weeklyQuota })
+
+        XCTAssertEqual(tokenCard.title, "5 小时已使用")
+        XCTAssertEqual(tokenCard.primaryValue, "0%")
+        XCTAssertEqual(tokenCard.meterValue ?? -1, 1, accuracy: 0.001)
+        XCTAssertEqual(weeklyCard.title, "7 天已使用")
+        XCTAssertEqual(weeklyCard.primaryValue, "3%")
+        XCTAssertEqual(weeklyCard.meterValue ?? -1, 0.97, accuracy: 0.001)
+    }
+
     func testCommandRunnerTerminatesTimedOutProcess() {
         XCTAssertThrowsError(try CommandRunner().run("/bin/sleep", arguments: ["2"], timeout: 0.1)) { error in
             XCTAssertTrue(error is CommandRunnerError)
