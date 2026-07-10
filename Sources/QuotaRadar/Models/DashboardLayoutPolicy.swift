@@ -48,7 +48,7 @@ struct DashboardLayoutPolicy {
     var fitsHeight: Bool {
         guard !providers.isEmpty else { return false }
         return providers.count == 1
-            || (providerLayoutMode == .horizontal && providers.allSatisfy { !$0.hasRenderedCards })
+            || providers.allSatisfy { !$0.hasRenderedCards }
     }
 
     func scrollAxes(viewportWidth: CGFloat) -> DashboardScrollAxes {

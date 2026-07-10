@@ -55,6 +55,19 @@ final class DashboardLayoutPolicyTests: XCTestCase {
         XCTAssertEqual(policy.minimumContentHeight, 426)
     }
 
+    func testVerticalRingOnlyLayoutAlsoFitsHeightDeterministically() {
+        let policy = DashboardLayoutPolicy(
+            preset: .compact,
+            providerLayoutMode: .vertical,
+            providers: [
+                .init(provider: .codex, hasRenderedCards: false),
+                .init(provider: .glm, hasRenderedCards: false)
+            ]
+        )
+
+        XCTAssertTrue(policy.fitsHeight)
+    }
+
     func testVerticalSpaciousLayoutRequiresCompleteFirstPanelHeight() {
         let policy = DashboardLayoutPolicy(
             preset: .spacious,
