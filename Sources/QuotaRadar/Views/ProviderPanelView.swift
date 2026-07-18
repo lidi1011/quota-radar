@@ -3,6 +3,7 @@ import SwiftUI
 struct ProviderPanelView: View {
     var provider: ProviderID
     var snapshot: ProviderSnapshot?
+    var displayedWindows: [UsageWindow]
     var state: ProviderLoadState
     var preferences: ProviderPreferences
     var layout: LayoutPreset
@@ -128,10 +129,7 @@ struct ProviderPanelView: View {
     private var ringBlock: some View {
         VStack(spacing: 12) {
             QuotaRingView(
-                windows: snapshot?.windows ?? [
-                    .placeholder(id: "primary", label: "主"),
-                    .placeholder(id: "secondary", label: "次")
-                ],
+                windows: displayedWindows,
                 primaryHex: preferences.ringPrimaryHex,
                 secondaryHex: preferences.ringSecondaryHex,
                 layout: layout
@@ -139,16 +137,21 @@ struct ProviderPanelView: View {
             .frame(width: layout.ringSize, height: layout.ringSize)
 
             VStack(spacing: 8) {
-                ForEach(snapshot?.windows ?? []) { window in
+                ForEach(Array(displayedWindows.enumerated()), id: \.element.id) { index, window in
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(window.id == (snapshot?.windows.first?.id ?? "") ? Color(hex: preferences.ringPrimaryHex) : Color(hex: preferences.ringSecondaryHex))
+                            .fill(Color(hex: ringColorHex(for: window, fallbackIndex: index)))
                             .frame(width: 8, height: 8)
-                        Text(window.label)
-                            .font(layout.ringLabelFont)
-                        Text("重置")
-                            .font(layout.ringLabelFont)
-                            .foregroundStyle(.secondary)
+                        if window.isCountdown {
+                            Text("倒计时")
+                                .font(layout.ringLabelFont)
+                        } else {
+                            Text(window.label)
+                                .font(layout.ringLabelFont)
+                            Text("重置")
+                                .font(layout.ringLabelFont)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Text(window.resetText)
                             .font(layout.ringLabelFont.monospacedDigit())
@@ -156,6 +159,14 @@ struct ProviderPanelView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func ringColorHex(for window: UsageWindow, fallbackIndex: Int) -> String {
+        switch window.preferredRingRole {
+        case .primary: preferences.ringPrimaryHex
+        case .secondary: preferences.ringSecondaryHex
+        case nil: fallbackIndex == 0 ? preferences.ringPrimaryHex : preferences.ringSecondaryHex
         }
     }
 

@@ -178,6 +178,11 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(RadarFormatters.compactTokens(1_000_000_000), "1B")
     }
 
+    func testCountdownPercentFormattingKeepsOneDecimalWithoutChangingStandardPercent() {
+        XCTAssertEqual(RadarFormatters.countdownPercent(99.53), "99.5%")
+        XCTAssertEqual(RadarFormatters.percent(99.53), "100%")
+    }
+
     func testResetFormatterUsesLocalTimeWithoutYear() {
         var components = DateComponents()
         components.calendar = Calendar.current
@@ -425,6 +430,74 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(settings.providerLayoutMode, .vertical)
         settings.providerLayoutMode = .horizontal
         XCTAssertEqual(AppSettings(defaults: defaults).providerLayoutMode, .horizontal)
+    }
+
+    func testCodexQuotaRingModeDefaultsToSevenDayAndPersistsDualWindowChoice() {
+        let suiteName = "QuotaRadarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.codexQuotaRingMode, .sevenDay)
+        settings.codexQuotaRingMode = .fiveHourAndSevenDay
+        XCTAssertEqual(AppSettings(defaults: defaults).codexQuotaRingMode, .fiveHourAndSevenDay)
+    }
+
+    func testCodexQuotaRingModeKeepsLegacyDualWindowsUnchanged() {
+        let windows = [
+            UsageWindow(id: "5h", label: "5 小时", remainingPercent: 80, usedPercent: 20, resetText: "稍后"),
+            UsageWindow(id: "7d", label: "7 天", remainingPercent: 60, usedPercent: 40, resetText: "下周")
+        ]
+
+        XCTAssertEqual(CodexQuotaRingMode.fiveHourAndSevenDay.windows(from: windows), windows)
+    }
+
+    func testCodexSevenDayModeUsesSolePrimaryWindowAndAddsCountdownRing() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let nextReset = now.addingTimeInterval(6 * 24 * 60 * 60)
+        let result: [String: Any] = [
+            "rateLimits": [
+                "limitName": "Codex",
+                "primary": ["usedPercent": 25.0, "resetsAt": nextReset.timeIntervalSince1970]
+            ]
+        ]
+        let snapshot = try XCTUnwrap(CodexAppServerRateLimitParser.parse(result))
+
+        let windows = CodexQuotaRingMode.sevenDay.windows(from: snapshot.windows, now: now)
+
+        XCTAssertEqual(windows.map(\.id), ["7d", "7dCountdown"])
+        XCTAssertEqual(windows[0].label, "7 天")
+        XCTAssertEqual(windows[0].remainingPercent, 75)
+        XCTAssertEqual(windows[0].resetsAt, nextReset)
+        XCTAssertNotEqual(windows[0].resetText, "未知")
+        XCTAssertEqual(windows[0].preferredRingRole, .secondary)
+        XCTAssertFalse(windows[0].isCountdown)
+        XCTAssertEqual(windows[1].label, "倒计时")
+        XCTAssertEqual(windows[1].remainingPercent, 600 / 7, accuracy: 0.001)
+        XCTAssertEqual(windows[1].resetText, "6天0小时0分")
+        XCTAssertEqual(windows[1].preferredRingRole, .primary)
+        XCTAssertTrue(windows[1].isCountdown)
+    }
+
+    func testCodexSevenDayModePrefersRealSecondaryWindowWhenBothPeriodsExist() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let primaryReset = now.addingTimeInterval(2 * 60 * 60)
+        let secondaryReset = now.addingTimeInterval(5 * 24 * 60 * 60)
+        let snapshot = CodexRateLimitSnapshot(
+            primaryUsedPercent: 20,
+            primaryResetsAt: primaryReset,
+            secondaryUsedPercent: 40,
+            secondaryResetsAt: secondaryReset,
+            planType: "Codex"
+        )
+
+        let windows = CodexQuotaRingMode.sevenDay.windows(from: snapshot.windows, now: now)
+
+        XCTAssertEqual(windows[0].remainingPercent, 60)
+        XCTAssertEqual(windows[0].resetsAt, secondaryReset)
+        XCTAssertEqual(windows[1].remainingPercent, 500 / 7, accuracy: 0.001)
+        XCTAssertEqual(windows[1].resetText, "5天0小时0分")
     }
 
     func testCodexSubscriptionReaderSkipsBackendWhenRemoteLookupDisabled() async {

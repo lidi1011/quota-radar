@@ -85,6 +85,8 @@ Keep radii modest and consistent. Use `rounded.sm` for controls and `rounded.md`
 
 Component tokens define reusable visual behavior. Provider visibility, provider card visibility, and provider colors are user-configurable in Settings.
 
+Codex quota rings have two persisted display modes. `7 天` is the default: the outer ring uses the existing secondary/7-day color and shows remaining quota, while the inner ring uses the former primary/5-hour color and counts down the time remaining before the next reset as `(reset time - current time) / seven days`. The center labels the two percentages as `7 天` and `倒计时`; countdown percentages use one fractional digit while quota percentages keep their existing integer format. Beneath the ring, the real reset row is followed by a separate, primary-color-dotted `倒计时` row formatted as `x天x小时x分`. When the upstream app-server exposes only `primary`, the 7-day presentation maps that sole real window to the outer ring instead of displaying the missing `secondary` placeholder. `5 小时 + 7 天` preserves the original nested dual-quota presentation for compatibility if Codex restores the 5-hour reset window. This choice affects only presentation; both raw rate-limit windows remain in the provider snapshot.
+
 ## Do's and Don'ts
 
 - Do update this file when quota panel layout, provider colors, typography, spacing, or component tokens change.

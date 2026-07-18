@@ -21,6 +21,71 @@ enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 }
 
+enum CodexQuotaRingMode: String, CaseIterable, Identifiable, Sendable {
+    case fiveHourAndSevenDay
+    case sevenDay
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fiveHourAndSevenDay: "5 小时 + 7 天"
+        case .sevenDay: "7 天"
+        }
+    }
+
+    func windows(from windows: [UsageWindow], now: Date = Date()) -> [UsageWindow] {
+        switch self {
+        case .fiveHourAndSevenDay:
+            windows
+        case .sevenDay:
+            sevenDayWindows(from: windows, now: now)
+        }
+    }
+
+    private func sevenDayWindows(from windows: [UsageWindow], now: Date) -> [UsageWindow] {
+        let labeledSevenDay = windows.first(where: { $0.id == "7d" })
+        let legacyPrimary = windows.first(where: { $0.id == "5h" })
+        let source: UsageWindow
+
+        if let labeledSevenDay, labeledSevenDay.resetsAt != nil {
+            source = labeledSevenDay
+        } else if let legacyPrimary, legacyPrimary.resetsAt != nil {
+            source = legacyPrimary
+        } else {
+            source = labeledSevenDay
+                ?? legacyPrimary
+                ?? .placeholder(id: "7d", label: "7 天")
+        }
+
+        var sevenDay = source
+        sevenDay.id = "7d"
+        sevenDay.label = "7 天"
+
+        let period = 7 * 24 * 60 * 60.0
+        let remainingSeconds = source.resetsAt.map { max(0, $0.timeIntervalSince(now)) } ?? 0
+        let countdownPercent = min(100, remainingSeconds / period * 100)
+        let countdown = UsageWindow(
+            id: "7dCountdown",
+            label: "倒计时",
+            remainingPercent: countdownPercent,
+            usedPercent: countdownPercent,
+            resetText: source.resetsAt == nil ? "未知" : countdownText(remainingSeconds),
+            resetsAt: source.resetsAt
+        )
+
+        return [sevenDay, countdown]
+    }
+
+    private func countdownText(_ remainingSeconds: TimeInterval) -> String {
+        let totalMinutes = Int(max(0, remainingSeconds) / 60)
+        let days = totalMinutes / (24 * 60)
+        let hours = totalMinutes % (24 * 60) / 60
+        let minutes = totalMinutes % 60
+        return "\(days)天\(hours)小时\(minutes)分"
+    }
+}
+
 enum UsageCardID: String, CaseIterable, Codable, Identifiable, Sendable {
     case today
     case sevenDays
@@ -57,10 +122,28 @@ struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
     var remainingPercent: Double
     var usedPercent: Double
     var resetText: String
+    var resetsAt: Date? = nil
 
     static func placeholder(id: String, label: String) -> UsageWindow {
         UsageWindow(id: id, label: label, remainingPercent: 0, usedPercent: 0, resetText: "未连接")
     }
+
+    var preferredRingRole: QuotaRingRole? {
+        switch id {
+        case "5h", "token", "7dCountdown": .primary
+        case "7d", "weekly": .secondary
+        default: nil
+        }
+    }
+
+    var isCountdown: Bool {
+        id == "7dCountdown"
+    }
+}
+
+enum QuotaRingRole: Equatable, Sendable {
+    case primary
+    case secondary
 }
 
 struct TokenBreakdown: Codable, Equatable, Sendable {

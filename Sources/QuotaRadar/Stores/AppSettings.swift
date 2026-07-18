@@ -17,6 +17,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(providerLayoutMode.rawValue, forKey: Keys.providerLayoutMode) }
     }
 
+    @Published var codexQuotaRingMode: CodexQuotaRingMode {
+        didSet { defaults.set(codexQuotaRingMode.rawValue, forKey: Keys.codexQuotaRingMode) }
+    }
+
     @Published var glmAuthToken: String {
         didSet { defaults.set(glmAuthToken, forKey: Keys.glmAuthToken) }
     }
@@ -45,6 +49,7 @@ final class AppSettings: ObservableObject {
         refreshIntervalMinutes = savedInterval > 0 ? savedInterval : 5
         layoutPreset = defaults.string(forKey: Keys.layoutPreset).flatMap(LayoutPreset.init(rawValue:)) ?? .standard
         providerLayoutMode = defaults.string(forKey: Keys.providerLayoutMode).flatMap(ProviderLayoutMode.init(rawValue:)) ?? .vertical
+        codexQuotaRingMode = defaults.string(forKey: Keys.codexQuotaRingMode).flatMap(CodexQuotaRingMode.init(rawValue:)) ?? .sevenDay
         glmAuthToken = defaults.string(forKey: Keys.glmAuthToken) ?? ""
         glmBaseURL = defaults.string(forKey: Keys.glmBaseURL) ?? "https://open.bigmodel.cn/api/anthropic"
         codexRemoteSubscriptionLookupEnabled = defaults.bool(forKey: Keys.codexRemoteSubscriptionLookupEnabled)
@@ -218,6 +223,7 @@ private enum Keys {
     static let refreshIntervalMinutes = "refreshIntervalMinutes"
     static let layoutPreset = "layoutPreset"
     static let providerLayoutMode = "providerLayoutMode"
+    static let codexQuotaRingMode = "codexQuotaRingMode"
     static let glmAuthToken = "glmAuthToken"
     static let glmBaseURL = "glmBaseURL"
     static let codexManualSubscriptionRule = "subscriptionExpiry.codex.manualRule"

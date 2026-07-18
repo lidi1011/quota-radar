@@ -59,6 +59,7 @@ NOTARY_PROFILE="<notary-profile>" \
 ## 数据来源与网络边界
 
 - Codex：默认读取本机 `~/.codex` token/session 数据，并尝试调用本机 Codex app-server 的额度接口。
+- Codex 圆环：默认使用当前的 `7 天` 模式，外环显示剩余额度，内环按 `(重置时间 - 当前时间) / 7 天` 显示精确到小数点后 1 位的重置倒计时比例，并在圆环下方通过同色圆点标识倒计时行，显示剩余天、小时和分钟；可在 Codex 设置中切回兼容的 `5 小时 + 7 天` 双额度圆环，以便上游恢复 5 小时周期时直接启用。
 - Codex 订阅到期：默认只使用本机 Codex app-server 和设置页手动规则。设置页可显式开启远程读取；开启后会使用本机 Codex access token 请求 `chatgpt.com` backend 来尝试读取订阅到期日。
 - GLM / ZAI：内置参考 `glm-plan-usage` 的读取方式，使用 `ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_BASE_URL` 调用 quota API；设置页可手动补充。
 

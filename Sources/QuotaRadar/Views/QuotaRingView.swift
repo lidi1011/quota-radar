@@ -11,14 +11,22 @@ struct QuotaRingView: View {
             ringBackground(lineWidth: layout.ringLineWidth)
 
             if let first = windows.first {
-                ring(value: first.remainingPercent / 100, color: Color(hex: primaryHex), lineWidth: layout.ringLineWidth)
+                ring(
+                    value: first.remainingPercent / 100,
+                    color: Color(hex: ringColorHex(for: first, fallbackIndex: 0)),
+                    lineWidth: layout.ringLineWidth
+                )
             }
 
-            ringBackground(lineWidth: layout.ringLineWidth)
-                .frame(width: innerRingSize, height: innerRingSize)
-
             if windows.count > 1 {
-                ring(value: windows[1].remainingPercent / 100, color: Color(hex: secondaryHex), lineWidth: layout.ringLineWidth)
+                ringBackground(lineWidth: layout.ringLineWidth)
+                    .frame(width: innerRingSize, height: innerRingSize)
+
+                ring(
+                    value: windows[1].remainingPercent / 100,
+                    color: Color(hex: ringColorHex(for: windows[1], fallbackIndex: 1)),
+                    lineWidth: layout.ringLineWidth
+                )
                     .frame(width: innerRingSize, height: innerRingSize)
             }
 
@@ -26,9 +34,9 @@ struct QuotaRingView: View {
                 ForEach(Array(windows.prefix(2).enumerated()), id: \.element.id) { index, window in
                     HStack(spacing: 6) {
                         Text(window.label)
-                            .foregroundStyle(index == 0 ? Color(hex: primaryHex) : Color(hex: secondaryHex))
+                            .foregroundStyle(Color(hex: ringColorHex(for: window, fallbackIndex: index)))
                             .font(layout.ringLabelFont)
-                        Text(RadarFormatters.percent(window.remainingPercent))
+                        Text(percentText(for: window))
                             .font(layout.ringValueFont)
                     }
                 }
@@ -38,6 +46,22 @@ struct QuotaRingView: View {
 
     private var innerRingSize: CGFloat {
         layout.ringSize * 0.67
+    }
+
+    private func percentText(for window: UsageWindow) -> String {
+        if window.isCountdown {
+            RadarFormatters.countdownPercent(window.remainingPercent)
+        } else {
+            RadarFormatters.percent(window.remainingPercent)
+        }
+    }
+
+    private func ringColorHex(for window: UsageWindow, fallbackIndex: Int) -> String {
+        switch window.preferredRingRole {
+        case .primary: primaryHex
+        case .secondary: secondaryHex
+        case nil: fallbackIndex == 0 ? primaryHex : secondaryHex
+        }
     }
 
     private func ringBackground(lineWidth: CGFloat) -> some View {

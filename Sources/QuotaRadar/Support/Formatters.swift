@@ -36,6 +36,10 @@ enum RadarFormatters {
         String(format: "%.0f%%", max(0, min(100, value)))
     }
 
+    static func countdownPercent(_ value: Double) -> String {
+        String(format: "%.1f%%", max(0, min(100, value)))
+    }
+
     static func money(_ value: Double) -> String {
         String(format: "$%.2f", value)
     }

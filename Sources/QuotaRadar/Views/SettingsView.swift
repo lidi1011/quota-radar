@@ -63,6 +63,19 @@ struct SettingsView: View {
             .tabItem { Label("通用", systemImage: "gearshape") }
 
             ProviderSettingsPage(provider: .codex) {
+                SettingsCard("额度圆环") {
+                    SettingsRow(title: "重置周期", detail: "7 天模式显示额度外环与重置倒计时内环；兼容模式保留原双额度圆环") {
+                        Picker("重置周期", selection: $settings.codexQuotaRingMode) {
+                            ForEach(CodexQuotaRingMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                }
+
                 SettingsCard("Codex 订阅读取") {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle(isOn: $settings.codexRemoteSubscriptionLookupEnabled) {
@@ -143,7 +156,7 @@ private struct ProviderSettingsPage<Extra: View>: View {
     }
 
     var body: some View {
-        SettingsPage(title: provider.displayName, subtitle: "配色和卡片显示") {
+        SettingsPage(title: provider.displayName, subtitle: provider == .codex ? "圆环、配色和卡片显示" : "配色和卡片显示") {
             SettingsCard("配色") {
                 ColorSettingRow(title: "主圆环", color: colorBinding(\.ringPrimaryHex))
                 Divider()

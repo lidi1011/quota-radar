@@ -133,6 +133,7 @@ struct ContentView: View {
             ProviderPanelView(
                 provider: provider,
                 snapshot: store.snapshots[provider],
+                displayedWindows: displayedWindows(for: provider),
                 state: store.states[provider] ?? .idle,
                 preferences: settings.preferences(for: provider),
                 layout: settings.layoutPreset
@@ -140,6 +141,31 @@ struct ContentView: View {
                 Task { await store.refresh(provider) }
             }
             .frame(width: policy.panelWidth(for: provider, viewportWidth: containerWidth))
+        }
+    }
+
+    private func displayedWindows(for provider: ProviderID) -> [UsageWindow] {
+        let windows = store.snapshots[provider]?.windows ?? placeholderWindows(for: provider)
+        switch provider {
+        case .codex:
+            return settings.codexQuotaRingMode.windows(from: windows)
+        case .glm:
+            return windows
+        }
+    }
+
+    private func placeholderWindows(for provider: ProviderID) -> [UsageWindow] {
+        switch provider {
+        case .codex:
+            [
+                .placeholder(id: "5h", label: "5 小时"),
+                .placeholder(id: "7d", label: "7 天")
+            ]
+        case .glm:
+            [
+                .placeholder(id: "token", label: "5 小时"),
+                .placeholder(id: "weekly", label: "7 天")
+            ]
         }
     }
 
