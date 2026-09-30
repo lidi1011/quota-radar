@@ -5,16 +5,20 @@ final class UsageStore: ObservableObject {
     @Published private(set) var snapshots: [ProviderID: ProviderSnapshot] = [:]
     @Published private(set) var states: [ProviderID: ProviderLoadState] = [
         .codex: .idle,
-        .glm: .idle
+        .glm: .idle,
+        .claude: .idle
     ]
 
     private let settings: AppSettings
+    private let claudeDesktopClient: ClaudeDesktopClient
+    private var refreshVersions: [ProviderID: UUID] = [:]
     private let glmCache = GLMQuotaCache()
     private let codexSubscriptionCache = SubscriptionInfoCache()
     private var timer: Timer?
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, claudeDesktopClient: ClaudeDesktopClient = ClaudeDesktopClient()) {
         self.settings = settings
+        self.claudeDesktopClient = claudeDesktopClient
     }
 
     func startAutoRefresh() {
@@ -34,7 +38,7 @@ final class UsageStore: ObservableObject {
 
     func refreshAll(force: Bool) async {
         let providers = ProviderID.allCases.map { provider in
-            (id: provider, provider: makeProvider(provider))
+            (id: provider, provider: makeProvider(provider), version: beginRefresh(provider))
         }
         for item in providers {
             states[item.id] = .loading
@@ -44,9 +48,9 @@ final class UsageStore: ObservableObject {
             for item in providers {
                 group.addTask {
                     do {
-                        return .success(item.id, try await item.provider.snapshot(force: force))
+                        return .success(item.id, item.version, try await item.provider.snapshot(force: force))
                     } catch {
-                        return .failure(item.id, error.localizedDescription)
+                        return .failure(item.id, item.version, error.localizedDescription)
                     }
                 }
             }
@@ -58,19 +62,40 @@ final class UsageStore: ObservableObject {
     }
 
     func refresh(_ provider: ProviderID, force: Bool = true) async {
+        let version = beginRefresh(provider)
         states[provider] = .loading
         do {
-            let snapshot = try await makeProvider(provider).snapshot(force: force)
-            snapshots[provider] = snapshot
-            states[provider] = .loaded(Date())
+            apply(.success(provider, version, try await makeProvider(provider).snapshot(force: force)))
         } catch {
-            states[provider] = .failed(error.localizedDescription)
-            snapshots[provider] = ProviderSnapshot.placeholder(
-                provider: provider,
-                message: error.localizedDescription,
-                manualSubscriptionRule: manualSubscriptionRule(for: provider)
-            )
+            apply(.failure(provider, version, error.localizedDescription))
         }
+    }
+
+    // Invalidate immediately when the source changes, before starting another task.
+    func changeClaudeSource() {
+        refreshVersions[.claude] = UUID()
+        snapshots[.claude] = ClaudeCodeProvider.unavailable(settings.claudeReadingEnabled
+            ? "正在读取 \(settings.claudeQuotaSource.title) 额度" : claudePausedMessage)
+        if !settings.claudeReadingEnabled { states[.claude] = .idle }
+        Task {
+            if settings.claudeQuotaSource == .cli || !settings.claudeDesktopReadingEnabled {
+                await claudeDesktopClient.cancelPending()
+            }
+            if settings.claudeReadingEnabled { await refresh(.claude) }
+        }
+    }
+
+    private var claudePausedMessage: String {
+        "\(settings.claudeQuotaSource.title) · 已暂停读取"
+    }
+
+    private func beginRefresh(_ provider: ProviderID) -> UUID {
+        let version = UUID()
+        if provider == .claude && settings.claudeQuotaSource == .desktop && settings.claudeReadingEnabled {
+            snapshots[.claude] = ClaudeCodeProvider.unavailable("正在核对 Claude 桌面端账号与额度")
+        }
+        refreshVersions[provider] = version
+        return version
     }
 
     private func makeProvider(_ provider: ProviderID) -> UsageProvider {
@@ -81,6 +106,12 @@ final class UsageStore: ObservableObject {
                 allowRemoteSubscriptionLookup: settings.codexRemoteSubscriptionLookupEnabled,
                 subscriptionCache: codexSubscriptionCache
             )
+        case .claude:
+            if !settings.claudeReadingEnabled {
+                PausedClaudeProvider(message: claudePausedMessage)
+            } else {
+                settings.claudeQuotaSource == .cli ? ClaudeCodeProvider() as any UsageProvider : ClaudeDesktopProvider(client: claudeDesktopClient) as any UsageProvider
+            }
         case .glm:
             GLMProvider(settings: settings, cache: glmCache)
         }
@@ -90,6 +121,8 @@ final class UsageStore: ObservableObject {
         switch provider {
         case .codex:
             settings.codexManualSubscriptionRule
+        case .claude:
+            nil
         case .glm:
             settings.glmManualSubscriptionRule
         }
@@ -97,10 +130,22 @@ final class UsageStore: ObservableObject {
 
     private func apply(_ outcome: RefreshOutcome) {
         switch outcome {
-        case .success(let provider, let snapshot):
+        case .success(let provider, let version, let snapshot):
+            guard refreshVersions[provider] == version else { return }
+            if provider == .claude && !settings.claudeReadingEnabled {
+                snapshots[.claude] = ClaudeCodeProvider.unavailable(claudePausedMessage)
+                states[.claude] = .idle
+                return
+            }
             snapshots[provider] = snapshot
             states[provider] = .loaded(Date())
-        case .failure(let provider, let message):
+        case .failure(let provider, let version, let message):
+            guard refreshVersions[provider] == version else { return }
+            if provider == .claude && !settings.claudeReadingEnabled {
+                snapshots[.claude] = ClaudeCodeProvider.unavailable(claudePausedMessage)
+                states[.claude] = .idle
+                return
+            }
             states[provider] = .failed(message)
             snapshots[provider] = ProviderSnapshot.placeholder(
                 provider: provider,
@@ -111,9 +156,17 @@ final class UsageStore: ObservableObject {
     }
 }
 
+private struct PausedClaudeProvider: UsageProvider {
+    let id: ProviderID = .claude
+    let message: String
+    func snapshot(force: Bool) async throws -> ProviderSnapshot {
+        ClaudeCodeProvider.unavailable(message)
+    }
+}
+
 private enum RefreshOutcome: Sendable {
-    case success(ProviderID, ProviderSnapshot)
-    case failure(ProviderID, String)
+    case success(ProviderID, UUID, ProviderSnapshot)
+    case failure(ProviderID, UUID, String)
 }
 
 private extension ProviderSnapshot {
@@ -126,6 +179,8 @@ private extension ProviderSnapshot {
             .usageCard()
 
         switch provider {
+        case .claude:
+            return ClaudeCodeProvider.unavailable(message)
         case .codex:
             windows = [
                 .placeholder(id: "5h", label: "5 小时"),

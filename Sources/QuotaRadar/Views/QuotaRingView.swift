@@ -10,7 +10,8 @@ struct QuotaRingView: View {
         ZStack {
             ringBackground(lineWidth: layout.ringLineWidth)
 
-            if let first = windows.first {
+            if let first = windows.first, first.isAvailable != false,
+               first.isAvailable == nil || first.remainingPercent > 0 {
                 ring(
                     value: first.remainingPercent / 100,
                     color: Color(hex: ringColorHex(for: first, fallbackIndex: 0)),
@@ -22,12 +23,15 @@ struct QuotaRingView: View {
                 ringBackground(lineWidth: layout.ringLineWidth)
                     .frame(width: innerRingSize, height: innerRingSize)
 
-                ring(
-                    value: windows[1].remainingPercent / 100,
-                    color: Color(hex: ringColorHex(for: windows[1], fallbackIndex: 1)),
-                    lineWidth: layout.ringLineWidth
-                )
+                if windows[1].isAvailable != false,
+                   windows[1].isAvailable == nil || windows[1].remainingPercent > 0 {
+                    ring(
+                        value: windows[1].remainingPercent / 100,
+                        color: Color(hex: ringColorHex(for: windows[1], fallbackIndex: 1)),
+                        lineWidth: layout.ringLineWidth
+                    )
                     .frame(width: innerRingSize, height: innerRingSize)
+                }
             }
 
             VStack(spacing: 6) {
@@ -49,7 +53,9 @@ struct QuotaRingView: View {
     }
 
     private func percentText(for window: UsageWindow) -> String {
-        if window.isCountdown {
+        if window.isAvailable == false {
+            "--"
+        } else if window.isCountdown {
             RadarFormatters.countdownPercent(window.remainingPercent)
         } else {
             RadarFormatters.percent(window.remainingPercent)

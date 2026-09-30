@@ -3,6 +3,85 @@ import XCTest
 @testable import QuotaRadar
 
 final class DashboardLayoutPolicyTests: XCTestCase {
+    func testHorizontalRingRowUsesMeasuredHeightInsteadOfEstimatedMinimum() {
+        for preset in LayoutPreset.allCases {
+            let policy = DashboardLayoutPolicy(
+                preset: preset, providerLayoutMode: .horizontal,
+                providers: [.init(provider: .codex, hasRenderedCards: false),
+                            .init(provider: .glm, hasRenderedCards: false),
+                            .init(provider: .claude, hasRenderedCards: false)]
+            )
+            let measuredHeight = policy.minimumContentHeight - 34.25
+
+            XCTAssertEqual(policy.minimumContentHeight(measuredContentHeight: measuredHeight), ceil(measuredHeight))
+            XCTAssertEqual(policy.minimumContentHeight(measuredContentHeight: 0), policy.minimumContentHeight)
+        }
+    }
+
+    func testMeasuredFullStackHeightDoesNotRaiseVerticalOrCardLayoutMinimum() {
+        var policy = DashboardLayoutPolicy(
+            preset: .compact, providerLayoutMode: .vertical,
+            providers: [.init(provider: .codex, hasRenderedCards: false),
+                        .init(provider: .glm, hasRenderedCards: false)]
+        )
+        XCTAssertEqual(policy.minimumContentHeight(measuredContentHeight: 1000), policy.minimumContentHeight)
+        policy.providerLayoutMode = .horizontal
+        policy.providers[0].hasRenderedCards = true
+        XCTAssertEqual(policy.minimumContentHeight(measuredContentHeight: 1000), policy.minimumContentHeight)
+        policy.providers = []
+        XCTAssertEqual(policy.minimumContentHeight(measuredContentHeight: 100), policy.minimumContentHeight)
+    }
+
+    func testLayoutTransitionRejectsStaleHeightAndFitsAfterNewMeasurement() {
+        let vertical = DashboardLayoutPolicy(
+            preset: .compact, providerLayoutMode: .vertical,
+            providers: [.init(provider: .codex, hasRenderedCards: false),
+                        .init(provider: .glm, hasRenderedCards: false),
+                        .init(provider: .claude, hasRenderedCards: false)]
+        )
+        var horizontal = vertical
+        horizontal.providerLayoutMode = .horizontal
+        let oldMeasurement = DashboardContentMeasurement(layout: vertical, height: 960)
+        XCTAssertEqual(oldMeasurement.height(for: vertical), 960)
+        XCTAssertEqual(oldMeasurement.height(for: horizontal), 0)
+
+        var state = WindowAutoFitState()
+        var input = WindowAutoFitState.Input(
+            layout: vertical, visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            layoutInsets: CGSize(width: 0, height: 38), hasMeasuredContent: true
+        )
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        input.layout = horizontal
+        input.hasMeasuredContent = oldMeasurement.height(for: horizontal) > 0
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        let newMeasurement = DashboardContentMeasurement(layout: horizontal, height: 331)
+        input.hasMeasuredContent = newMeasurement.height(for: horizontal) > 0
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        XCTAssertFalse(state.shouldFit(input, isLiveResizing: false))
+        horizontal.preset = .standard
+        XCTAssertEqual(newMeasurement.height(for: horizontal), 0)
+    }
+
+    func testAutoFitPreservesManualSizeUntilLayoutOrScreenChanges() {
+        var state = WindowAutoFitState()
+        var input = WindowAutoFitState.Input(
+            layout: DashboardLayoutPolicy(preset: .compact, providerLayoutMode: .vertical,
+                providers: [.init(provider: .codex, hasRenderedCards: false),
+                            .init(provider: .glm, hasRenderedCards: false),
+                            .init(provider: .claude, hasRenderedCards: false)]),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            layoutInsets: CGSize(width: 0, height: 38), hasMeasuredContent: true)
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        XCTAssertFalse(state.shouldFit(input, isLiveResizing: true))
+        XCTAssertFalse(state.shouldFit(input, isLiveResizing: false))
+        input.layout.preset = .standard
+        XCTAssertFalse(state.shouldFit(input, isLiveResizing: true))
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        input.visibleFrame.size.height = 1080
+        XCTAssertTrue(state.shouldFit(input, isLiveResizing: false))
+        XCTAssertFalse(state.shouldFit(input, isLiveResizing: false))
+    }
+
     func testRingOnlyPanelWidthsMatchAllPresets() {
         XCTAssertEqual(LayoutPreset.compact.ringOnlyPanelWidth, 320)
         XCTAssertEqual(LayoutPreset.standard.ringOnlyPanelWidth, 390)

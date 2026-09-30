@@ -9,6 +9,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+enum QuotaRadarEntry {
+    @MainActor static func main() {
+        if CommandLine.arguments.contains("--claude-statusline") {
+            exit(ClaudeStatusLineBridge().run())
+        }
+        QuotaRadarApp.main()
+    }
+}
+
 struct QuotaRadarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var settings = AppSettings()
@@ -25,7 +34,6 @@ struct QuotaRadarApp: App {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(store)
-                .frame(minWidth: 320, minHeight: 360)
                 .task {
                     await store.refreshAll(force: true)
                     store.startAutoRefresh()
@@ -35,6 +43,7 @@ struct QuotaRadarApp: App {
                 }
         }
         .windowResizability(.contentMinSize)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandMenu("额度雷达") {
                 Button("刷新全部") {

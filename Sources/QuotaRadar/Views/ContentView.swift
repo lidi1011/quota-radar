@@ -3,10 +3,10 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: UsageStore
-    @State private var contentHeight: CGFloat = 0
+    @State private var contentMeasurement: DashboardContentMeasurement?
 
     private var visibleProviders: [ProviderID] {
-        ProviderID.allCases.filter { settings.isProviderVisible($0) }
+        settings.orderedVisibleProviders
     }
 
     private var providerLayoutContents: [ProviderLayoutContent] {
@@ -33,6 +33,7 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { windowProxy in
             let policy = layoutPolicy
+            let contentHeight = contentMeasurement?.height(for: policy) ?? 0
             ScrollView(scrollAxes(policy: policy, viewportWidth: windowProxy.size.width)) {
                 Group {
                     if policy.isEmpty {
@@ -50,19 +51,25 @@ struct ContentView: View {
                 .padding(.vertical, settings.layoutPreset.contentVerticalPadding)
                 .background(
                     GeometryReader { proxy in
-                        Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
+                        Color.clear.preference(
+                            key: ContentHeightPreferenceKey.self,
+                            value: DashboardContentMeasurement(layout: policy, height: proxy.size.height)
+                        )
                     }
                 )
             }
-            .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
-                contentHeight = height
+            .scrollIndicators(.visible)
+            .onPreferenceChange(ContentHeightPreferenceKey.self) { measurement in
+                contentMeasurement = measurement
             }
             .background(
                 MainWindowSizeFitter(
+                    layout: policy,
+                    hasMeasuredContent: contentHeight > 0,
                     contentWidth: policy.fitsWidth ? policy.minimumContentWidth : nil,
-                    contentHeight: policy.ringOnlyContentHeight ?? contentHeight,
+                    contentHeight: contentHeight > 0 ? contentHeight : (policy.ringOnlyContentHeight ?? 0),
                     minimumContentWidth: policy.minimumContentWidth,
-                    minimumContentHeight: policy.minimumContentHeight,
+                    minimumContentHeight: policy.minimumContentHeight(measuredContentHeight: contentHeight),
                     shouldFitWidth: policy.fitsWidth,
                     shouldFitHeight: policy.fitsHeight
                 )
@@ -91,6 +98,9 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(minWidth: 320, minHeight: min(360, layoutPolicy.minimumContentHeight(
+            measuredContentHeight: contentMeasurement?.height(for: layoutPolicy) ?? 0
+        )))
     }
 
     private func scrollAxes(policy: DashboardLayoutPolicy, viewportWidth: CGFloat) -> Axis.Set {
@@ -106,7 +116,7 @@ struct ContentView: View {
         ContentUnavailableView {
             Label("未显示 Provider", systemImage: "rectangle.stack.badge.plus")
         } description: {
-            Text("请在设置中启用 Codex 或 GLM。")
+            Text("请在设置中启用 Codex、GLM 或 Claude Code。")
         } actions: {
             SettingsLink {
                 Text("打开设置")
@@ -136,7 +146,8 @@ struct ContentView: View {
                 displayedWindows: displayedWindows(for: provider),
                 state: store.states[provider] ?? .idle,
                 preferences: settings.preferences(for: provider),
-                layout: settings.layoutPreset
+                layout: settings.layoutPreset,
+                refreshEnabled: provider != .claude || settings.claudeReadingEnabled
             ) {
                 Task { await store.refresh(provider) }
             }
@@ -149,13 +160,15 @@ struct ContentView: View {
         switch provider {
         case .codex:
             return settings.codexQuotaRingMode.windows(from: windows)
-        case .glm:
+        case .glm, .claude:
             return windows
         }
     }
 
     private func placeholderWindows(for provider: ProviderID) -> [UsageWindow] {
         switch provider {
+        case .claude:
+            ClaudeCodeProvider.unavailable("").windows
         case .codex:
             [
                 .placeholder(id: "5h", label: "5 小时"),
@@ -172,20 +185,30 @@ struct ContentView: View {
 }
 
 private struct ContentHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
+    static var defaultValue: DashboardContentMeasurement? { nil }
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+    static func reduce(value: inout DashboardContentMeasurement?, nextValue: () -> DashboardContentMeasurement?) {
+        if let next = nextValue() {
+            value = next
+        }
     }
 }
 
 private struct MainWindowSizeFitter: NSViewRepresentable {
+    var layout: DashboardLayoutPolicy
+    var hasMeasuredContent: Bool
     var contentWidth: CGFloat?
     var contentHeight: CGFloat
     var minimumContentWidth: CGFloat
     var minimumContentHeight: CGFloat
     var shouldFitWidth: Bool
     var shouldFitHeight: Bool
+
+    final class Coordinator {
+        var autoFit = WindowAutoFitState()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         NSView()
@@ -214,6 +237,10 @@ private struct MainWindowSizeFitter: NSViewRepresentable {
                 layoutInsets: layoutInsets,
                 visibleFrame: visibleFrame
             )
+
+            let input = WindowAutoFitState.Input(layout: layout, visibleFrame: visibleFrame,
+                                                 layoutInsets: layoutInsets, hasMeasuredContent: hasMeasuredContent)
+            guard context.coordinator.autoFit.shouldFit(input, isLiveResizing: window.inLiveResize) else { return }
 
             var targetWidth = max(currentContentWidth, minimumWidth)
             var targetHeight = max(currentContentHeight, minimumHeight)

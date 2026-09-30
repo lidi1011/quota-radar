@@ -10,7 +10,7 @@ enum DashboardScrollAxes: Equatable {
     case both
 }
 
-struct DashboardLayoutPolicy {
+struct DashboardLayoutPolicy: Equatable {
     var preset: LayoutPreset
     var providerLayoutMode: ProviderLayoutMode
     var providers: [ProviderLayoutContent]
@@ -39,6 +39,14 @@ struct DashboardLayoutPolicy {
 
     var minimumContentHeight: CGFloat {
         max(360, preset.ringOnlyPanelWidth + preset.contentVerticalPadding * 2)
+    }
+
+    func minimumContentHeight(measuredContentHeight: CGFloat) -> CGFloat {
+        guard providerLayoutMode == .horizontal, fitsWidth, measuredContentHeight > 0 else {
+            return minimumContentHeight
+        }
+        // Ring-only rows need just their actual height, including outer padding.
+        return ceil(measuredContentHeight)
     }
 
     var minimumBodyWidth: CGFloat {
@@ -104,6 +112,15 @@ struct DashboardLayoutPolicy {
     }
 }
 
+struct DashboardContentMeasurement: Equatable {
+    var layout: DashboardLayoutPolicy
+    var height: CGFloat
+
+    func height(for layout: DashboardLayoutPolicy) -> CGFloat {
+        self.layout == layout ? max(0, height) : 0
+    }
+}
+
 enum WindowFramePolicy {
     static func frameSize(
         contentLayoutSize: CGSize,
@@ -141,5 +158,24 @@ enum WindowFramePolicy {
             visibleFrame.maxY - size.height
         )
         return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    }
+}
+
+// Auto-fit on layout/screen transitions, never on each geometry or quota update.
+// In particular, mouse resizing must not be followed by a snap back to ring size.
+struct WindowAutoFitState {
+    private var previous: Input?
+
+    struct Input: Equatable {
+        var layout: DashboardLayoutPolicy
+        var visibleFrame: CGRect
+        var layoutInsets: CGSize
+        var hasMeasuredContent: Bool
+    }
+
+    mutating func shouldFit(_ input: Input, isLiveResizing: Bool) -> Bool {
+        guard !isLiveResizing, input != previous else { return false }
+        previous = input
+        return true
     }
 }

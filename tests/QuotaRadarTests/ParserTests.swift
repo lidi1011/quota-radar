@@ -453,6 +453,45 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(CodexQuotaRingMode.fiveHourAndSevenDay.windows(from: windows), windows)
     }
 
+    func testCodexInitialQuotaAndCountdownAreUnavailable() {
+        let windows = [
+            UsageWindow.placeholder(id: "5h", label: "5 小时"),
+            UsageWindow.placeholder(id: "7d", label: "7 天")
+        ]
+
+        XCTAssertTrue(windows.allSatisfy { $0.isAvailable == false })
+        let displayed = CodexQuotaRingMode.sevenDay.windows(from: windows)
+        XCTAssertEqual(displayed.map(\.id), ["7d", "7dCountdown"])
+        XCTAssertTrue(displayed.allSatisfy { $0.isAvailable == false })
+        XCTAssertNil(displayed[1].resetsAt)
+    }
+
+    func testCodexConfirmedZeroQuotaRemainsAvailable() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let quota = UsageWindow(
+            id: "7d", label: "7 天", remainingPercent: 0, usedPercent: 100,
+            resetText: "下周", resetsAt: now.addingTimeInterval(6 * 24 * 60 * 60)
+        )
+
+        let displayed = CodexQuotaRingMode.sevenDay.windows(from: [quota], now: now)
+        XCTAssertNotEqual(displayed[0].isAvailable, false)
+        XCTAssertEqual(displayed[0].remainingPercent, 0)
+        XCTAssertEqual(displayed[1].isAvailable, true)
+    }
+
+    func testCodexCountdownWithoutResetTimeIsUnavailable() {
+        let quota = UsageWindow(
+            id: "7d", label: "7 天", remainingPercent: 70, usedPercent: 30,
+            resetText: "未知"
+        )
+
+        let displayed = CodexQuotaRingMode.sevenDay.windows(from: [quota])
+        XCTAssertNotEqual(displayed[0].isAvailable, false)
+        XCTAssertEqual(displayed[0].remainingPercent, 70)
+        XCTAssertEqual(displayed[1].isAvailable, false)
+        XCTAssertEqual(displayed[1].resetText, "未知")
+    }
+
     func testCodexSevenDayModeUsesSolePrimaryWindowAndAddsCountdownRing() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let nextReset = now.addingTimeInterval(6 * 24 * 60 * 60)

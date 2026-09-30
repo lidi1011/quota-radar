@@ -1,6 +1,50 @@
 import Foundation
 
+enum ClaudeQuotaSource: String, CaseIterable, Sendable {
+    case cli
+    case desktop
+
+    var title: String { self == .cli ? "CLI" : "Claude 桌面端" }
+}
+
 final class AppSettings: ObservableObject {
+    @Published private(set) var providerOrder: [ProviderID] {
+        didSet { defaults.set(providerOrder.map(\.rawValue), forKey: "providerOrder") }
+    }
+
+    var orderedVisibleProviders: [ProviderID] {
+        providerOrder.filter { isProviderVisible($0) }
+    }
+
+    func moveProvider(_ provider: ProviderID, by offset: Int) {
+        guard let index = providerOrder.firstIndex(of: provider),
+              offset == -1 || offset == 1,
+              providerOrder.indices.contains(index + offset) else { return }
+        providerOrder.swapAt(index, index + offset)
+    }
+
+    private static func normalizedProviderOrder(_ saved: [String]) -> [ProviderID] {
+        var result: [ProviderID] = []
+        for provider in saved.compactMap(ProviderID.init(rawValue:)) + ProviderID.allCases {
+            if !result.contains(provider) { result.append(provider) }
+        }
+        return result
+    }
+
+    @Published var claudeCLIReadingEnabled: Bool {
+        didSet { defaults.set(claudeCLIReadingEnabled, forKey: "claudeCLIReadingEnabled") }
+    }
+    @Published var claudeDesktopReadingEnabled: Bool {
+        didSet { defaults.set(claudeDesktopReadingEnabled, forKey: "claudeDesktopReadingEnabled") }
+    }
+    var claudeReadingEnabled: Bool {
+        claudeQuotaSource == .cli ? claudeCLIReadingEnabled : claudeDesktopReadingEnabled
+    }
+
+    @Published var claudeQuotaSource: ClaudeQuotaSource {
+        didSet { defaults.set(claudeQuotaSource.rawValue, forKey: "claudeQuotaSource") }
+    }
+
     @Published var refreshIntervalMinutes: Double {
         didSet { defaults.set(refreshIntervalMinutes, forKey: Keys.refreshIntervalMinutes) }
     }
@@ -45,6 +89,10 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        providerOrder = Self.normalizedProviderOrder(defaults.stringArray(forKey: "providerOrder") ?? [])
+        claudeCLIReadingEnabled = defaults.object(forKey: "claudeCLIReadingEnabled") as? Bool ?? true
+        claudeDesktopReadingEnabled = defaults.object(forKey: "claudeDesktopReadingEnabled") as? Bool ?? true
+        claudeQuotaSource = defaults.string(forKey: "claudeQuotaSource").flatMap(ClaudeQuotaSource.init(rawValue:)) ?? .cli
         let savedInterval = defaults.double(forKey: Keys.refreshIntervalMinutes)
         refreshIntervalMinutes = savedInterval > 0 ? savedInterval : 5
         layoutPreset = defaults.string(forKey: Keys.layoutPreset).flatMap(LayoutPreset.init(rawValue:)) ?? .standard
@@ -176,6 +224,9 @@ struct ProviderPreferences: Codable, Equatable {
                 cardAccentHex: "#2563EB",
                 visibleCards: [.today, .sevenDays, .total, .planProgress, .resetCredits, .subscriptionExpiry]
             )
+        case .claude:
+            ProviderPreferences(ringPrimaryHex: "#D97757", ringSecondaryHex: "#E9B872",
+                                cardAccentHex: "#D97757", visibleCards: [])
         case .glm:
             ProviderPreferences(
                 ringPrimaryHex: "#14B8A6",
@@ -202,6 +253,7 @@ struct ProviderPreferences: Codable, Equatable {
     }
 
     private static func migrateSubscriptionExpiry(_ preferences: ProviderPreferences, provider: ProviderID, defaults: UserDefaults) -> ProviderPreferences {
+        guard provider != .claude else { return preferences }
         let key = Keys.subscriptionExpiryMigrated(provider)
         guard !defaults.bool(forKey: key) else {
             return preferences

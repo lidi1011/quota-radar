@@ -4,8 +4,8 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="QuotaRadar"
 BUNDLE_ID="com.lidi.QuotaRadar"
-APP_VERSION="1.0.5"
-BUILD_VERSION="10"
+APP_VERSION="1.0.6"
+BUILD_VERSION="11"
 MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

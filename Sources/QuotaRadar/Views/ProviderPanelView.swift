@@ -7,6 +7,7 @@ struct ProviderPanelView: View {
     var state: ProviderLoadState
     var preferences: ProviderPreferences
     var layout: LayoutPreset
+    var refreshEnabled: Bool = true
     var refresh: () -> Void
 
     private var gridCards: [UsageCard] {
@@ -122,7 +123,7 @@ struct ProviderPanelView: View {
                 Label("刷新", systemImage: state == .loading ? "hourglass" : "arrow.clockwise")
             }
             .buttonStyle(.bordered)
-            .disabled(state == .loading)
+            .disabled(state == .loading || !refreshEnabled)
         }
     }
 
@@ -202,6 +203,13 @@ struct ProviderPanelView: View {
     }
 
     private var statusLine: String {
+        if !refreshEnabled {
+            return "已暂停读取"
+        }
+        if state == .loading {
+            return snapshot?.windows.contains(where: { $0.isAvailable != false }) == true
+                ? "更新中" : "加载中"
+        }
         if case .failed(let message) = state {
             return message
         }

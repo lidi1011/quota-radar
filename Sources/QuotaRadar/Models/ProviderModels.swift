@@ -3,6 +3,7 @@ import Foundation
 enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
     case codex
     case glm
+    case claude
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
         switch self {
         case .codex: "Codex"
         case .glm: "GLM"
+        case .claude: "Claude Code"
         }
     }
 
@@ -17,6 +19,7 @@ enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
         switch self {
         case .codex: "OpenAI Codex coding plan"
         case .glm: "ZAI / 智谱 coding plan"
+        case .claude: "Claude Code 订阅额度"
         }
     }
 }
@@ -71,7 +74,8 @@ enum CodexQuotaRingMode: String, CaseIterable, Identifiable, Sendable {
             remainingPercent: countdownPercent,
             usedPercent: countdownPercent,
             resetText: source.resetsAt == nil ? "未知" : countdownText(remainingSeconds),
-            resetsAt: source.resetsAt
+            resetsAt: source.resetsAt,
+            isAvailable: source.isAvailable != false && source.resetsAt != nil
         )
 
         return [sevenDay, countdown]
@@ -123,9 +127,10 @@ struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
     var usedPercent: Double
     var resetText: String
     var resetsAt: Date? = nil
+    var isAvailable: Bool? = nil
 
     static func placeholder(id: String, label: String) -> UsageWindow {
-        UsageWindow(id: id, label: label, remainingPercent: 0, usedPercent: 0, resetText: "未连接")
+        UsageWindow(id: id, label: label, remainingPercent: 0, usedPercent: 0, resetText: "未连接", isAvailable: false)
     }
 
     var preferredRingRole: QuotaRingRole? {
